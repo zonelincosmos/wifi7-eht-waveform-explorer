@@ -351,7 +351,7 @@ function AMPDUBytesViz({c}) {
 
   return (
     <div className="panel">
-      <h2><span className="num">ι</span>A-MPDU byte layout <span className="desc">— IEEE 802.11-2024 §10.12.7 · APEP = {APEP.toLocaleString()} B → PSDU = {total.toLocaleString()} B · NumMPDUs = {numMpdus} · all numbers are exact (matches ref/wifi7-python build_ampdu)</span></h2>
+      <h2><span className="num">ι</span>A-MPDU byte layout <span className="desc">— IEEE 802.11-2024 §10.12.7 · all byte counts are exact (matches ref/wifi7-python build_ampdu)</span></h2>
       <div style={{display:'flex', gap:2, marginTop:10, height:80, borderRadius:8, overflow:'hidden', border:'1px solid var(--line)'}}>
         {regions.filter(r=>r.len>0).map((r,i)=>(
           <div key={i} title={`${r.len.toLocaleString()} bytes`} style={{
@@ -376,17 +376,16 @@ function AMPDUBytesViz({c}) {
         <div className="hl-card"><div className="lab">PSDU bytes</div><div className="vv">{total.toLocaleString()}<span className="un">B</span></div></div>
       </div>
       <div className="detail" style={{marginTop:12}}>
-        Per-subframe layout (chunk + align): {layout.subframes.map((sf, i) =>
+        Per-subframe split (chunk + align bytes): {layout.subframes.map((sf, i) =>
           `#${i+1} = ${sf.chunk}+${sf.align}`).join(' · ')}.
-        {' '}
-        Real-subframes total = {layout.total_real.toLocaleString()} B · EOF region = {layout.eof_bytes.toLocaleString()} B
-        {' '}({layout.eof_count} delim{layout.eof_tail>0?` + ${layout.eof_tail} B 0xFF tail`:''}) · PSDU = {total.toLocaleString()} B ✓
+        {' '}Real-subframes total {layout.total_real.toLocaleString()} + EOF region {layout.eof_bytes.toLocaleString()}
+        {' '}({layout.eof_count} delim{layout.eof_tail>0?` + ${layout.eof_tail}-byte 0xFF tail`:''}) = {total.toLocaleString()} ✓
         <br/>
         <span style={{display:'block', marginTop:6, color:'var(--ink-muted)', fontSize:11}}>
-          Note: APEP_LENGTH ({APEP.toLocaleString()} B) is the signalled <em>target</em> pre-EOF size; the actual real-subframes
-          region is {layout.total_real.toLocaleString()} B ({APEP - layout.total_real} B less) because each subframe must end on a 4-byte
-          boundary and at least one EOF delim must follow. Eq. 36-66 N_PAD_MAC_bytes = {c.N_PAD_MAC_bytes.toLocaleString()} B; the
-          {' '}{layout.eof_bytes - c.N_PAD_MAC_bytes}-byte difference is the alignment slack absorbed at the start of the EOF region.
+          Note: APEP_LENGTH is the signalled <em>target</em> pre-EOF size; real-subframes region is
+          {' '}{APEP - layout.total_real} smaller because each subframe must end on a 4-byte boundary and at least one EOF
+          delim must follow. Eq. 36-66 N_PAD_MAC_bytes = {c.N_PAD_MAC_bytes.toLocaleString()};
+          the {layout.eof_bytes - c.N_PAD_MAC_bytes}-byte gap is the alignment slack absorbed at the start of the EOF region.
         </span>
       </div>
     </div>
