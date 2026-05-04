@@ -174,7 +174,7 @@ function BitPipeline({c, p}) {
       body: <>
         <p>Wrap user payload (<code>APEP_LENGTH = {c.APEP.toLocaleString()} B</code>) into <code>{c.NumMPDUs}</code> real MPDU subframe{c.NumMPDUs>1?'s':''} + EOF-padding delimiters to fill PSDU_LENGTH = <code>{c.PSDU_bytes.toLocaleString()} B</code>.</p>
         <p>Real subframe: <code>4 (Delim) + 26 (MAC hdr) + body + 4 (FCS) + 0–3 (4B align)</code><br/>
-        EOF padding subframes: each 4 bytes <code>= 01 00 9E 4E</code> (length=0, EOF=1, sig=0x4E)</p>
+        EOF padding subframes: each 4 bytes <code>= 01 00 79 4E</code> (length=0, EOF=1, CRC-8=0x79, sig=0x4E)</p>
         <p>Spec: §10.12.6 (MAC), §36.3.13.3.5 Eq.36-66 (PHY signaling).</p>
       </>
     },

@@ -338,7 +338,7 @@ function AMPDUBytesViz({c}) {
   });
   if (layout.eof_count > 0) {
     regions.push({ len: layout.eof_count*4, color:'#fed7aa',
-                   label:`${layout.eof_count}× EOF Pad`, hex:'01 00 9E 4E ×'+layout.eof_count });
+                   label:`${layout.eof_count}× EOF Pad`, hex:'01 00 79 4E ×'+layout.eof_count });
   }
   if (layout.eof_tail > 0) {
     regions.push({ len: layout.eof_tail, color:'#fed7aa',
@@ -407,14 +407,16 @@ function CRCStepperViz() {
   }, [input]);
   let result, scopeDesc;
   if (variant==='crc8'){
-    // build 16 bits MSB-first per delim spec
+    // 802.11 transmits LSB-first within each byte, so bits16[i] = bit i of byte (i>>3),
+    // taking the LOW bit first.  This matches ref/wifi7-python/utils/ampdu.py:_build_delimiter
+    // which does `[(word16 >> b) & 1 for b in range(16)]` over a word built byte0=LSByte.
     const bits = [];
     for (let i=0;i<2 && i<bytes.length;i++){
-      for (let b=7;b>=0;b--) bits.push((bytes[i]>>b)&1);
+      for (let b=0;b<8;b++) bits.push((bytes[i]>>b)&1);
     }
     while (bits.length<16) bits.push(0);
     result = E4.crc8_amDelim(bits.slice(0,16));
-    scopeDesc = 'A-MPDU delimiter B0–B15 (16 bits) · poly 0x07, init 0xFF, final XOR 0xFF';
+    scopeDesc = 'A-MPDU delim B0–B15 (16 bits, LSB-first per byte) · poly 0x07, init 0xFF, final XOR 0xFF, output bit-reversed';
   } else {
     result = E4.crc32(bytes);
     scopeDesc = 'CRC-32/IEEE (reflected, poly 0xEDB88320, init/final 0xFFFFFFFF)';
@@ -440,13 +442,13 @@ function CRCStepperViz() {
       <div style={{display:'flex', gap:8, marginTop:8, flexWrap:'wrap'}}>
         {variant==='crc8' ? (
           <>
-            <button onClick={()=>setInput('35EA')} style={presetBtn()}>delim B0–B15 of "35 EA 6E 4E" → expect 0x6E</button>
-            <button onClick={()=>setInput('0100')} style={presetBtn()}>EOF delim → expect 0x9E</button>
+            <button onClick={()=>setInput('0100')} style={presetBtn()}>EOF delim B0–B15 (length=0,EOF=1) → expect 0x79</button>
+            <button onClick={()=>setInput('B09B')} style={presetBtn()}>real subframe (mpdu_len=2491) → expect 0x03</button>
           </>
         ) : (
           <>
             <button onClick={()=>setInput('00')} style={presetBtn()}>0x00 → expect 0xD202EF8D</button>
-            <button onClick={()=>setInput('123456789')} style={presetBtn()}>"123456789" check vector → 0xCBF43926</button>
+            <button onClick={()=>setInput('313233343536373839')} style={presetBtn()}>ASCII "123456789" check vector → 0xCBF43926</button>
           </>
         )}
       </div>
@@ -459,7 +461,9 @@ function CRCStepperViz() {
         <div style={{fontSize:11, color:'#cbd5e1', marginTop:4}}>input = {bytes.length} bytes: {bytes.map(b=>b.toString(16).toUpperCase().padStart(2,'0')).join(' ')||'(empty)'}</div>
       </div>
       <div className="detail" style={{marginTop:12}}>
-        For the A-MPDU delimiter "<code>35 EA 6E 4E</code>": the first 16 bits cover length=14989 + EOF=1 + reserved=0 (bit-reversed for transmission). CRC-8 over those 16 bits = <b>0x6E</b>, then a fixed signature byte <b>0x4E</b> ends the delimiter.
+        Delimiter format (HE/EHT, IEEE 802.11-2024 §9.6.2 / Figure 9-66): B0=EOF, B1–B3=Reserved(0), B4–B15=MPDU Length(12-bit), B16–B23=CRC-8, B24–B31=signature <code>0x4E</code>.
+        The EOF padding delim with length=0 / EOF=1 → word16=<code>0x0001</code> → byte stream <code>01 00</code>; CRC-8 over those 16 LSB-first bits = <b>0x79</b>; full delim = <code>01 00 79 4E</code>.
+        For a real subframe with mpdu_len=2491 → word16=<code>0x9BB0</code> → byte stream <code>B0 9B</code>; CRC-8 = <b>0x03</b>; full delim = <code>B0 9B 03 4E</code>.
       </div>
     </div>
   );

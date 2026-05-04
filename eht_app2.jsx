@@ -55,7 +55,7 @@ function MPDUView({c}) {
       </div>
       <div className="bigbar-legend">
         <span><span className="sw" style={{background:'#3b82f6'}}></span>Real subframe — delim(4) + MAC(26) + chunk + FCS(4) + align(0..3)</span>
-        <span><span className="sw" style={{background:'#fb923c'}}></span>EOF-padding delim — Length=0, EOF=1, fixed bytes <code>01 00 9E 4E</code></span>
+        <span><span className="sw" style={{background:'#fb923c'}}></span>EOF-padding delim — Length=0, EOF=1, fixed bytes <code>01 00 79 4E</code></span>
       </div>
       <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontFamily:'JetBrains Mono, monospace', lineHeight:1.55}}>
         Real-subframes total = {layout.total_real.toLocaleString()} B · EOF region = {layout.eof_bytes.toLocaleString()} B · PSDU = {c.PSDU_bytes.toLocaleString()} B ✓
