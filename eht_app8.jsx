@@ -649,8 +649,33 @@ function BitTraceTool({ p }) {
   return (
     <div className="panel">
       <h2><span className="num">⤳</span> Bit-Trace Tool
-        <span className="desc">Follow one PSDU bit through scrambler → LDPC → constellation → SC → OFDM symbol → samples (math verified vs ref/wifi7-python pipeline)</span>
+        <span className="desc">Pick ONE bit of your PSDU payload — see exactly where it lives at every stage of the PHY pipeline (math verified vs ref/wifi7-python)</span>
       </h2>
+
+      {/* "What is this" intro card — keeps the panel self-explanatory */}
+      <div style={{
+        padding:'12px 16px', background:'#eef6ff', border:'1px solid #b6d4fe',
+        borderRadius:8, fontSize:13, lineHeight:1.6, color:'#1e3a8a', marginBottom:14
+      }}>
+        <div style={{fontWeight:700, marginBottom:6, fontSize:14}}>What this tool does</div>
+        <div>
+          A WiFi 7 transmitter shreds your payload through 8 transformations
+          (scrambler → LDPC → bit→QAM → segment-parser → tone-map → pilots → IFFT → CP).
+          By the time the bit becomes RF, its <i>identity</i> is buried inside a complex sample.
+          Pick a single byte (e.g. byte&nbsp;0, bit&nbsp;3 = the 4th bit of byte&nbsp;0) and the
+          panel tells you, at every stage:
+          <ul style={{margin:'6px 0 0 0', paddingLeft:24, lineHeight:1.7}}>
+            <li><b>which</b> LDPC codeword it lands in (#0..#{c.N_CW-1})</li>
+            <li><b>which</b> OFDM symbol carries it (#0..#{c.N_SYM-1})</li>
+            <li><b>which</b> sub-block (segment parser) and <b>which</b> physical subcarrier it modulates</li>
+            <li><b>which</b> time-domain sample range, in 480 MHz samples, it ultimately occupies</li>
+          </ul>
+          <div style={{marginTop:8, fontSize:12, color:'#1e40af'}}>
+            <b>Use it for:</b> debugging spec edge cases · teaching the LDPC distribution rule (shortening / puncturing / repetition) · sanity-checking your own reference implementation byte-by-byte.
+          </div>
+        </div>
+      </div>
+
       <div style={{display:'flex', gap:14, marginBottom:14, fontFamily:'JetBrains Mono, monospace', fontSize:13, alignItems:'center', flexWrap:'wrap'}}>
         <label>byte:&nbsp;
           <input type="number" min="0" max={maxByte} value={safeByteIdx}
