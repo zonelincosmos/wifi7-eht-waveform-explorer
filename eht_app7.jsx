@@ -97,7 +97,11 @@ function OFDMARUViz() {
     'mu-484x2':     { name:'MU · 2×484-tone',                layout:[{w:484, u:'A', col:'#3b82f6'},{w:484, u:'B', col:'#10b981'}] },
     'mu-242x4':     { name:'MU · 4×242-tone',                layout:[{w:242, u:'A', col:'#3b82f6'},{w:242, u:'B', col:'#10b981'},{w:242, u:'C', col:'#db2777'},{w:242, u:'D', col:'#f97316'}] },
     'mru-mix':      { name:'MRU · 484+242 + 996 + 484',      layout:[{w:484, u:'A', col:'#3b82f6'},{w:242, u:'A', col:'#3b82f6', mru:true},{w:996, u:'B', col:'#10b981'},{w:484, u:'C', col:'#db2777'}] },
-    'small-26':     { name:'Many small RUs',                 layout:Array.from({length:9}).map((_,i)=>({w:106, u:String.fromCharCode(65+i), col:['#3b82f6','#10b981','#db2777','#f97316','#7c5ce0','#0ea5b7','#dc2a55','#16a34a','#eab308'][i]})) }
+    'small-mix':    { name:'Mixed small RUs (illustrative)', layout:[
+                      {w:106, u:'A', col:'#3b82f6'},{w:106, u:'B', col:'#10b981'},{w:106, u:'C', col:'#db2777'},{w:26, u:'D', col:'#f97316'},
+                      {w:106, u:'E', col:'#7c5ce0'},{w:106, u:'F', col:'#0ea5b7'},{w:106, u:'G', col:'#dc2a55'},{w:26, u:'H', col:'#16a34a'},
+                      {w:106, u:'I', col:'#eab308'},{w:106, u:'J', col:'#ec4899'},{w:106, u:'K', col:'#84cc16'}
+                    ] }
   };
   const cur = SCHEMES[scheme];
   const total = cur.layout.reduce((a,r)=>a+r.w, 0);
@@ -110,7 +114,7 @@ function OFDMARUViz() {
   });
   return (
     <div className="panel">
-      <h2><span className="num">β₂</span>OFDMA RU / MRU layout <span className="desc">— §17 · split SCs across users; MRU = multi-RU per user (EHT only)</span></h2>
+      <h2><span className="num">β₂</span>OFDMA RU / MRU layout <span className="desc">— IEEE 802.11be-2024 §36.3.2.2 · split SCs across users; MRU = non-contiguous multi-RU per user (EHT-only feature)</span></h2>
       <div style={{display:'flex', gap:6, marginBottom:14, flexWrap:'wrap'}}>
         {Object.entries(SCHEMES).map(([k,v])=>(
           <button key={k} onClick={()=>setScheme(k)} style={{
@@ -144,7 +148,7 @@ function OFDMARUViz() {
         })}
       </div>
       <div style={{display:'flex', justifyContent:'space-between', fontSize:10, fontFamily:'JetBrains Mono, monospace', color:'var(--ink-muted)', marginBottom:14}}>
-        <span>20 MHz</span><span>80 MHz</span><span>160 MHz</span><span>240 MHz</span><span>320 MHz</span>
+        <span>0</span><span>80</span><span>160</span><span>240</span><span>320 MHz</span>
       </div>
       <div style={{display:'grid', gridTemplateColumns:`repeat(${Object.keys(byUser).length}, 1fr)`, gap:8}}>
         {Object.entries(byUser).map(([u,info])=>(
@@ -155,9 +159,12 @@ function OFDMARUViz() {
         ))}
       </div>
       <div className="detail" style={{marginTop:12}}>
-        OFDMA divides the 320-MHz channel into Resource Units (RU): 26/52/106/242/484/996/2×996/4×996 tones.
-        EHT adds <strong>MRU</strong>: a single user can take 484+242 or 996+484 (non-contiguous), reducing fragmentation
-        when puncturing is active. The AP signals each user's RU assignment in EHT-SIG User-Info.
+        OFDMA divides the 320-MHz channel into Resource Units (RU): 26 / 52 / 106 / 242 / 484 / 996 / 2×996 / 4×996 tones.
+        EHT adds <strong>MRU</strong> (Multi-RU): a single user can be assigned non-contiguous RUs to reduce fragmentation
+        under puncturing. Spec-allowed combinations include 484+242, 996+484, 996+484+242, 2×996+484, 3×996, 3×996+484
+        (large-MRU); and small-MRU patterns 52+26, 106+26 (small-RU only). The constraint is{' '}
+        <strong>small RUs (≤106) only combine with small RUs; large RUs (≥242) only with large</strong>{' '}
+        — see IEEE 802.11be-2024 §36.3.2.2. The AP signals each user's RU/MRU assignment via EHT-SIG User-Info.
       </div>
     </div>
   );
@@ -166,20 +173,36 @@ function OFDMARUViz() {
 // =============== §1.5 MLO link mapper ===============
 function MLOViz() {
   const [mode, setMode] = useS7('emlsr');
+  // Per-link peak PHY rates: all use the SAME framing — EHT MCS 13 (4096-QAM 5/6),
+  // 4 spatial streams, 0.8 µs GI — so the three numbers are directly comparable.
+  // Formula per link: N_SD · N_BPSCS · R · NSS / T_SYM_us
+  //   2.4 GHz / 40 MHz : 468·12·5/6·4 / 13.6 = 1376 Mbps
+  //   5 GHz   / 160 MHz: 1960·12·5/6·4 / 13.6 = 5764 Mbps
+  //   6 GHz   / 320 MHz: 3920·12·5/6·4 / 13.6 = 11529 Mbps
+  // (Matches TP-Link Archer BE800 / BE19000 marketing 1376 + 5760 + 11520.)
   const links = [
-    { band:'2.4 GHz', ch:'1 / 11', bw:40,  rate:574,  col:'#10b981', label:'reach' },
-    { band:'5 GHz',   ch:'36 / 149', bw:160, rate:2401, col:'#3b82f6', label:'workhorse' },
-    { band:'6 GHz',   ch:'1 / 33 / 65', bw:320, rate:11500, col:'#7c5ce0', label:'gigabit' }
+    { band:'2.4 GHz', ch:'1, 6, 11',                bw:40,  rate:1376,  col:'#10b981', label:'reach' },
+    { band:'5 GHz',   ch:'36 / 149 (160 MHz)',      bw:160, rate:5764,  col:'#3b82f6', label:'workhorse' },
+    { band:'6 GHz',   ch:'1 / 33 / 65 (320 MHz)',   bw:320, rate:11529, col:'#7c5ce0', label:'flagship' }
   ];
   const MODES = {
-    'emlsr':  { name:'EMLSR',          desc:'Enhanced Multi-Link Single-Radio — listen on all, transmit on one' },
-    'mlmr':   { name:'MLMR (str)',     desc:'Multi-Link Multi-Radio (STR) — transmit/recv simultaneously on multiple links' },
-    'nstr':   { name:'NSTR',           desc:'Non-STR pair — share TXOP between two links to avoid self-interference' }
+    'emlsr':  { name:'EMLSR',     desc:'Enhanced Multi-Link Single Radio — STA listens on all enabled links; transmits on whichever link wins TXOP contention.' },
+    'mlmr':   { name:'MLMR-STR',  desc:'Multi-Link Multi-Radio, Simultaneous Transmit & Receive — links operate independently in parallel.' },
+    'nstr':   { name:'MLMR-NSTR', desc:'Non-STR pair — adjacent-band links must align TXOP edges to avoid in-device interference (IDC).' }
   };
-  const totalRate = mode==='mlmr' ? links.reduce((a,l)=>a+l.rate,0) : Math.max(...links.map(l=>l.rate));
+  const rates = links.map(l => l.rate);
+  const sumRates = rates.reduce((a,b)=>a+b, 0);
+  const maxRate = Math.max(...rates);
+  // EMLSR: only one link transmits at a time → effective ≈ max single-link rate.
+  // MLMR-STR: independent simultaneous → effective ≈ sum.
+  // MLMR-NSTR: paired links share TXOP under coordination → between max and sum;
+  //            we approximate as max + 0.5·(sum − max) (paired link adds half-duty).
+  const totalRate = mode==='mlmr' ? sumRates
+                  : mode==='nstr' ? Math.round(maxRate + 0.5 * (sumRates - maxRate))
+                  : maxRate;
   return (
     <div className="panel">
-      <h2><span className="num">γ₂</span>Multi-Link Operation (MLO) <span className="desc">— §1 · 802.11be flagship: bind 2.4/5/6 GHz under one MAC</span></h2>
+      <h2><span className="num">γ₂</span>Multi-Link Operation (MLO) <span className="desc">— IEEE 802.11be-2024 §35.3 · MLD binds 2.4 / 5 / 6 GHz radios under one MAC</span></h2>
       <div style={{display:'flex', gap:6, marginBottom:14}}>
         {Object.entries(MODES).map(([k,v])=>(
           <button key={k} onClick={()=>setMode(k)} style={{
@@ -195,13 +218,33 @@ function MLOViz() {
       </div>
       <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10, marginBottom:14}}>
         {links.map(l=>{
-          const active = mode==='mlmr' || (mode==='emlsr' && l.band==='5 GHz') || (mode==='nstr' && l.band!=='2.4 GHz');
+          // Per-mode link state:
+          //   MLMR-STR : every link is independently TX-ing all the time.
+          //   EMLSR    : every link listens (control frames travel on all);
+          //              one wins TXOP and transmits — visualised on 5 GHz here.
+          //   MLMR-NSTR: 5 + 6 GHz form the typical adjacent-band NSTR pair;
+              //              2.4 GHz idle (unaffected by IDC).
+          const isMlmr  = mode === 'mlmr';
+          const isEmlsr = mode === 'emlsr';
+          const isNstr  = mode === 'nstr';
+          const enabled = isMlmr ||
+                          isEmlsr ||
+                          (isNstr && l.band !== '2.4 GHz');
+          const txState = isMlmr ? 'TX'
+                         : isEmlsr ? (l.band === '5 GHz' ? 'TX (won TXOP)' : 'LISTEN')
+                         : isNstr  ? (l.band === '2.4 GHz' ? 'idle' : 'paired-NSTR')
+                         : 'idle';
+          const txColor = txState === 'TX' || txState.startsWith('TX')
+                         ? l.col
+                         : txState === 'LISTEN' || txState === 'paired-NSTR'
+                            ? '#f59e0b'
+                            : 'var(--ink-muted)';
           return (
             <div key={l.band} style={{
               padding:'14px 16px', borderRadius:10,
-              background: active ? l.col+'15' : '#f8fafc',
-              border:`2px solid ${active ? l.col : 'var(--line)'}`,
-              opacity: active ? 1 : 0.5,
+              background: enabled ? l.col+'15' : '#f8fafc',
+              border:`2px solid ${enabled ? l.col : 'var(--line)'}`,
+              opacity: enabled ? 1 : 0.5,
               transition:'all 0.2s'
             }}>
               <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
@@ -210,13 +253,13 @@ function MLOViz() {
                 <div style={{fontSize:10, color:l.col, fontWeight:700, marginLeft:'auto', textTransform:'uppercase', letterSpacing:'0.06em'}}>{l.label}</div>
               </div>
               <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:11, color:'var(--ink-muted)', marginBottom:8}}>
-                ch {l.ch} · {l.bw} MHz max
+                {l.ch} · max {l.bw} MHz
               </div>
-              <div style={{fontSize:24, fontWeight:800, color: active ? l.col : 'var(--ink-muted)', fontFamily:'JetBrains Mono, monospace'}}>
-                {l.rate>=1000 ? (l.rate/1000).toFixed(1)+' Gbps' : l.rate+' Mbps'}
+              <div style={{fontSize:24, fontWeight:800, color: enabled ? l.col : 'var(--ink-muted)', fontFamily:'JetBrains Mono, monospace'}}>
+                {l.rate>=1000 ? (l.rate/1000).toFixed(2)+' Gbps' : l.rate+' Mbps'}
               </div>
-              <div style={{fontSize:10, color: active ? l.col : 'var(--ink-muted)', marginTop:4, fontWeight:600}}>
-                {active ? '● ACTIVE' : '○ idle'}
+              <div style={{fontSize:10, color: txColor, marginTop:4, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.05em'}}>
+                ● {txState}
               </div>
             </div>
           );
@@ -232,10 +275,12 @@ function MLOViz() {
         </div>
       </div>
       <div className="detail" style={{marginTop:12}}>
-        MLO is mostly a MAC-layer change — same EHT PHY runs on each link. The AP and STA negotiate which links to bind;
-        STR-capable hardware can transmit on all simultaneously, while EMLSR uses one radio that listens broadly and
-        switches to whichever link won contention. Latency drops because alternate links absorb spikes; aggregate
-        throughput multiplies for STR users.
+        MLO is primarily a MAC-layer change (IEEE 802.11be-2024 §35.3) — the same EHT PHY runs on each link.
+        An MLD (Multi-Link Device) negotiates a per-pair operating mode:
+        {' '}<strong>STR pair</strong> (well-isolated radios, e.g. 2.4 + 5 GHz) operate independently in parallel — full aggregate throughput;
+        {' '}<strong>NSTR pair</strong> (adjacent bands, typically 5 + 6 GHz, where in-device coupling causes self-interference) synchronise their TXOP edges so neither side TX-es while the other RX-es;
+        {' '}<strong>EMLSR</strong> is a low-cost STA mode where the device monitors all enabled links with a single full-MIMO radio chain and commits transmission to whichever link wins contention — sacrificing aggregate throughput for latency-bounded link diversity.
+        The peak-rate estimates above assume 4 spatial streams · MCS 13 (4096-QAM 5/6) · 0.8 µs GI per link.
       </div>
     </div>
   );
