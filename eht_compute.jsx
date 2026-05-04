@@ -308,17 +308,56 @@
       TSYM_us, T_DATA_us, NFFT, CP_data, data_samps,
       fieldUs, TXTIME, total_samps, LSIG_LEN,
       phy_rate_Mbps, mac_throughput_Mbps,
-      // A-MPDU summary. Per IEEE 802.11-2024 §10.12.7 each real subframe is
-      //   delim(4) + MAC_hdr(26) + chunk + FCS(4) + align_pad(0..3)
-      // For NumMPDUs=1 the chunk fills APEP exactly: chunk = APEP − 34, no
-      // align pad needed. For NumMPDUs ≥ 2 align pads accumulate; the bound
-      // user_data ≤ APEP − N·(34+3) is exact only when each subframe ends up
-      // 3-byte aligned. The expression below approximates that worst-case
-      // bound; it is informational and not used for visualisations (those
-      // read APEP, NumMPDUs, N_PAD_MAC_bytes directly).
+      // A-MPDU summary + EXACT byte map (faithful port of
+      // ref/wifi7-python/eht_waveform_gen.py:_size_user_data + utils/ampdu.py).
+      // Each real subframe = delim(4) + MAC_hdr(26) + chunk_i + FCS(4)
+      // + align_pad_i (0..3, picked so the subframe ends on a 4-byte boundary).
+      // user_data is sized as the LARGEST value such that:
+      //   (a) chunks fit equally across NumMPDUs subframes (first remainder
+      //       chunks get +1),
+      //   (b) total_subframes ≤ APEP − 4 (leave at least one EOF delim worth),
+      //   (c) (APEP − total_subframes) is a multiple of 4.
+      // Result: real_subframes_total may be 0..(34·N + 3·N + 4) bytes less
+      // than APEP_LENGTH; that slack is absorbed at the start of the EOF
+      // padding region. EOF region = PSDU_bytes − real_subframes_total
+      // (which differs by 0..N+1 bytes from the formula-derived
+      // N_PAD_MAC_bytes; both are valid, see PIPELINE_OVERVIEW.md §3.3.4).
+      ampdu_layout: ((APEP_in, N_in, PSDU_in) => {
+        const overhead = 34;          // delim 4 + MAC 26 + FCS 4
+        const max_align = 3;
+        const min_tail  = 4;
+        const max_user  = APEP_in - N_in * overhead - N_in * max_align - min_tail;
+        let user_data_len = 0;
+        let subframes = [];
+        let total_real = 0;
+        for (let user_try = max_user; user_try >= 0; user_try--) {
+          const chunk_base = Math.floor(user_try / N_in);
+          const chunk_rem  = user_try % N_in;
+          let total = 0;
+          const sf = [];
+          for (let i = 0; i < N_in; i++) {
+            const cs        = chunk_base + (i < chunk_rem ? 1 : 0);
+            const sf_unpad  = overhead + cs;
+            const align     = (4 - (sf_unpad % 4)) % 4;
+            const sf_total  = sf_unpad + align;
+            sf.push({ chunk: cs, align, total: sf_total });
+            total += sf_total;
+          }
+          const remaining = APEP_in - total;
+          if (remaining >= min_tail && remaining % 4 === 0) {
+            user_data_len = user_try;
+            subframes = sf;
+            total_real = total;
+            break;
+          }
+        }
+        const eof_bytes  = PSDU_in - total_real;
+        const eof_count  = Math.floor(eof_bytes / 4);
+        const eof_tail   = eof_bytes - eof_count * 4;     // 0..3 bytes of 0xFF tail
+        return { user_data_len, subframes, total_real, eof_bytes, eof_count, eof_tail, overhead };
+      })(APEP, NumMPDUs, APEP + N_PAD_MAC_bytes),
       perMPDU_overhead: 34,
-      max_chunk: 4065,
-      user_data_total_max: APEP - NumMPDUs * 34 - NumMPDUs * 3
+      max_chunk: 4065
     };
   }
 

@@ -18,20 +18,17 @@ const { useState: useState2, useEffect: useEffect2, useRef: useRef2, useMemo: us
 //   N_PAD_MAC_bytes (Eq. 36-66) = 1128 B = 282 delims; the 8-byte alignment
 //   slack on top is implementation overhead, still inside the EOF region.
 function MPDUView({c}) {
-  const numMpdus  = c.NumMPDUs || 1;
-  // Approximate per-subframe sizes assuming chunks are equally split and no
-  // alignment overhead (matches the spec formula PSDU = APEP + N_PAD_MAC_bytes).
-  // The actual byte map produced by build_ampdu may shift 0..3 bytes per
-  // subframe into the EOF region, but the totals are invariant.
-  const chunkApprox  = Math.floor(c.APEP / numMpdus) - 4 - 26 - 4;       // body per subframe
-  const subframeApprox = c.APEP / numMpdus;                              // bytes per subframe
-  const eofBytes  = c.N_PAD_MAC_bytes;
-  const eofCount  = Math.max(0, Math.floor(eofBytes / 4));
+  const numMpdus = c.NumMPDUs || 1;
+  // EXACT byte map from compute() — port of ref/wifi7-python/eht_waveform_gen.py
+  // user-data sizing + utils/ampdu.py::build_ampdu output. No approximations.
+  const layout = c.ampdu_layout;
+  const sf0    = layout.subframes[0];           // representative subframe for zoom
+  const tail   = layout.eof_tail;                // 0..3 bytes of 0xFF after last EOF delim
 
   return (
     <div className="panel">
       <h2><span className="num">6</span>A-MPDU / MPDU Structure
-        <span className="desc">— IEEE 802.11-2024 §10.12.7 · PSDU = {numMpdus} real subframe{numMpdus>1?'s':''} + EOF-padding delimiters · NumMPDUs auto = ⌈(APEP−4)/4102⌉ = {Math.max(1, Math.ceil((c.APEP-4)/4102))}</span>
+        <span className="desc">— IEEE 802.11-2024 §10.12.7 · NumMPDUs = {numMpdus} (auto-bumped from ⌈(APEP−4)/4102⌉ to fit the 12-bit MPDU-Length cap) · all numbers below are exact, computed by the same algorithm as ref/wifi7-python</span>
       </h2>
 
       {/* ============== ① Full A-MPDU = PSDU ============== */}
@@ -39,39 +36,39 @@ function MPDUView({c}) {
         ① Full A-MPDU (= PSDU) · {c.PSDU_bytes.toLocaleString()} B
       </div>
       <div className="bigbar" style={{height:80}}>
-        {Array.from({length: numMpdus}).map((_, i) => (
+        {layout.subframes.map((sf, i) => (
           <div key={i} className="bigbar-seg" style={{
-            flex:`${subframeApprox} 0 0`, minWidth:120,
+            flex:`${sf.total} 0 0`, minWidth:120,
             background: i % 2 === 0 ? '#3b82f6' : '#2563eb'
           }}>
             <div className="nm">Subframe {i+1}</div>
-            <div className="du">≈ {subframeApprox.toLocaleString()} B</div>
+            <div className="du">{sf.total.toLocaleString()} B</div>
           </div>
         ))}
-        {eofBytes > 0 && (
-          <div className="bigbar-seg" style={{flex:`${eofBytes} 0 0`, background:'#fb923c', minWidth:120,
+        {layout.eof_bytes > 0 && (
+          <div className="bigbar-seg" style={{flex:`${layout.eof_bytes} 0 0`, background:'#fb923c', minWidth:120,
               backgroundImage:'repeating-linear-gradient(45deg, #fb923c, #fb923c 6px, #f97316 6px, #f97316 12px)'}}>
             <div className="nm">EOF-padding region</div>
-            <div className="du">{eofBytes.toLocaleString()} B · {eofCount} delim × 4 B</div>
+            <div className="du">{layout.eof_bytes.toLocaleString()} B · {layout.eof_count} delim{tail>0?` + ${tail} B tail`:''}</div>
           </div>
         )}
       </div>
       <div className="bigbar-legend">
-        <span><span className="sw" style={{background:'#3b82f6'}}></span>Real subframe — carries one MPDU + alignment pad</span>
+        <span><span className="sw" style={{background:'#3b82f6'}}></span>Real subframe — delim(4) + MAC(26) + chunk + FCS(4) + align(0..3)</span>
         <span><span className="sw" style={{background:'#fb923c'}}></span>EOF-padding delim — Length=0, EOF=1, fixed bytes <code>01 00 9E 4E</code></span>
       </div>
-      <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontFamily:'JetBrains Mono, monospace'}}>
-        PSDU = APEP_LENGTH + N_PAD_MAC_bytes = {c.APEP.toLocaleString()} + {eofBytes.toLocaleString()} = {c.PSDU_bytes.toLocaleString()} B ✓
-        {numMpdus > 1 && (
-          <span style={{color:'var(--ink-muted)'}}>
-            {'  '}· each subframe ≈ APEP / NumMPDUs = {subframeApprox.toLocaleString()} B
-          </span>
-        )}
+      <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontFamily:'JetBrains Mono, monospace', lineHeight:1.55}}>
+        Real-subframes total = {layout.total_real.toLocaleString()} B · EOF region = {layout.eof_bytes.toLocaleString()} B · PSDU = {c.PSDU_bytes.toLocaleString()} B ✓
+        <br/>
+        <span style={{color:'var(--ink-muted)'}}>
+          Note: APEP_LENGTH = {c.APEP.toLocaleString()} B is the SIGNALLED pre-EOF target. The actual real-subframes region is {layout.total_real.toLocaleString()} B
+          ({c.APEP - layout.total_real} B less than APEP_LENGTH); the 4-byte-alignment slack lives at the start of the EOF region.
+        </span>
       </div>
 
       {/* ============== ② Zoom on one real subframe ============== */}
       <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginTop:18, marginBottom:6}}>
-        ② Zoom — one real subframe (≈ {subframeApprox.toLocaleString()} B for NumMPDUs={numMpdus})
+        ② Zoom — Subframe 1 ({sf0.total.toLocaleString()} B = delim 4 + MAC 26 + body {sf0.chunk.toLocaleString()} + FCS 4{sf0.align>0?` + align ${sf0.align}`:''})
       </div>
       <div className="bigbar">
         <div className="bigbar-seg" style={{flex:'4 0 0', background:'#db5a8a', minWidth:60}}>
@@ -80,25 +77,26 @@ function MPDUView({c}) {
         <div className="bigbar-seg" style={{flex:'26 0 0', background:'#7c5ce0', minWidth:90}}>
           <div className="nm">MAC Header</div><div className="du">26 B</div>
         </div>
-        <div className="bigbar-seg" style={{flex:`${chunkApprox} 1 0`, background:'#60a5fa', minWidth:120}}>
-          <div className="nm">Frame Body (user data chunk)</div><div className="du">≈ {chunkApprox.toLocaleString()} B</div>
+        <div className="bigbar-seg" style={{flex:`${sf0.chunk} 1 0`, background:'#60a5fa', minWidth:120}}>
+          <div className="nm">Frame Body (user-data chunk)</div><div className="du">{sf0.chunk.toLocaleString()} B</div>
         </div>
         <div className="bigbar-seg" style={{flex:'4 0 0', background:'#22c55e', minWidth:60}}>
           <div className="nm">FCS</div><div className="du">4 B</div>
         </div>
+        {sf0.align > 0 && (
+          <div className="bigbar-seg" style={{flex:`${sf0.align} 0 0`, background:'#fbbf24', minWidth:40}}>
+            <div className="nm">align</div><div className="du">{sf0.align} B</div>
+          </div>
+        )}
       </div>
       <div className="bigbar-legend">
-        <span><span className="sw" style={{background:'#db5a8a'}}></span>Real-subframe Delim — Length = (MAC+body+FCS), EOF = 0, CRC-8, Sig <code>0x4E</code></span>
+        <span><span className="sw" style={{background:'#db5a8a'}}></span>Real-subframe Delim — Length = (MAC + body + FCS), EOF = 0, CRC-8, Sig <code>0x4E</code></span>
         <span><span className="sw" style={{background:'#22c55e'}}></span>FCS — CRC-32 over MAC header + body</span>
+        <span><span className="sw" style={{background:'#fbbf24'}}></span>Align — 0..3 zero bytes so subframe ends on 4-byte boundary</span>
       </div>
-      <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontFamily:'JetBrains Mono, monospace', lineHeight:1.55}}>
-        Body chunk ≈ ⌊APEP / NumMPDUs⌋ − 34 = ⌊{c.APEP.toLocaleString()} / {numMpdus}⌋ − 34 = {chunkApprox.toLocaleString()} B per subframe.
-        <br/>
-        <span style={{color:'var(--ink-muted)'}}>
-          Real <code>build_ampdu</code> output may differ by 0..3 bytes per subframe due to 4-byte alignment of (delim+MPDU);
-          for canonical APEP=5000/NumMPDUs=2 the actual chunks are 2461 B + 1 B align = 2496 B per subframe (verified vs.
-          ref/wifi7-python). The 8-byte slack accumulates into the EOF region.
-        </span>
+      <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:6, fontFamily:'JetBrains Mono, monospace'}}>
+        Total user data across all {numMpdus} subframe{numMpdus>1?'s':''} = {layout.user_data_len.toLocaleString()} B
+        {' '}({layout.subframes.map(s => s.chunk).join(' + ')} = {layout.user_data_len.toLocaleString()})
       </div>
 
       <h3 style={{fontSize:13, color:'var(--accent)', margin:'18px 0 8px', fontWeight:600}}>A-MPDU Delimiter — 32 bits</h3>

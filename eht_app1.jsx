@@ -141,8 +141,10 @@ function Concentric({c}) {
     { c:'#60a5fa', t:'LDPC Output (N_avbits)', s:`${c.N_avbits.toLocaleString()} coded bits + ${(c.N_SYM*c.N_CBPS - c.N_avbits).toLocaleString()} post-FEC pad` },
     { c:'#93c5fd', t:'LDPC Input (N_pld)', s:`${c.N_pld.toLocaleString()} info bits → ${c.N_CW} × ${c.L_LDPC}-bit codewords` },
     { c:'#bfdbfe', t:'Scrambler Input', s:`SERVICE(16) + PSDU(${c.PSDU_bytes.toLocaleString()}B = ${(c.PSDU_bytes*8).toLocaleString()}b) + PHY pad(${c.N_PAD_PHY_bits}b) = ${c.N_pld.toLocaleString()}b` },
-    { c:'#dbeafe', t:'PSDU = A-MPDU', s:`${c.PSDU_bytes.toLocaleString()} bytes total · APEP user payload ${c.APEP.toLocaleString()} B + ${c.N_PAD_MAC_bytes.toLocaleString()} B EOF-delim padding` },
-    { c:'#e0f2fe', t:'Real MPDU + EOF padding', s:`1 real MPDU (Delim 4B + MAC hdr 26B + body + FCS 4B) + ${c.N_PAD_MAC_bytes>0?Math.ceil(c.N_PAD_MAC_bytes/4).toLocaleString():'0'} EOF-pad delim subframes` },
+    { c:'#dbeafe', t:'PSDU = A-MPDU',
+      s:`${c.PSDU_bytes.toLocaleString()} B = real-subframes ${c.ampdu_layout.total_real.toLocaleString()} B + EOF-padding ${c.ampdu_layout.eof_bytes.toLocaleString()} B (= ${c.ampdu_layout.eof_count} delims${c.ampdu_layout.eof_tail>0?` + ${c.ampdu_layout.eof_tail} B 0xFF tail`:''})` },
+    { c:'#e0f2fe', t:`${c.NumMPDUs} real MPDU subframe${c.NumMPDUs>1?'s':''}`,
+      s:c.ampdu_layout.subframes.map((sf,i)=>`#${i+1}: delim 4 + MAC 26 + body ${sf.chunk} + FCS 4${sf.align>0?` + align ${sf.align}`:''} = ${sf.total} B`).join(' · ') + ` · total user data ${c.ampdu_layout.user_data_len.toLocaleString()} B` },
     { c:'#f0f9ff', t:'MPDU = Header + Body + FCS', s:`26B MAC header + Frame Body + 4B FCS` }
   ];
   return (
@@ -170,7 +172,7 @@ function BitPipeline({c, p}) {
       t: 'Step 1 — Build PSDU (A-MPDU)',
       v: `${c.PSDU_bytes.toLocaleString()} bytes`,
       body: <>
-        <p>Wrap user payload (<code>APEP_LENGTH = {c.APEP.toLocaleString()} B</code>) into A-MPDU. With one real MPDU subframe + EOF padding delimiters to fill PSDU_LENGTH.</p>
+        <p>Wrap user payload (<code>APEP_LENGTH = {c.APEP.toLocaleString()} B</code>) into <code>{c.NumMPDUs}</code> real MPDU subframe{c.NumMPDUs>1?'s':''} + EOF-padding delimiters to fill PSDU_LENGTH = <code>{c.PSDU_bytes.toLocaleString()} B</code>.</p>
         <p>Real subframe: <code>4 (Delim) + 26 (MAC hdr) + body + 4 (FCS) + 0–3 (4B align)</code><br/>
         EOF padding subframes: each 4 bytes <code>= 01 00 9E 4E</code> (length=0, EOF=1, sig=0x4E)</p>
         <p>Spec: §10.12.6 (MAC), §36.3.13.3.5 Eq.36-66 (PHY signaling).</p>
