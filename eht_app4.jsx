@@ -76,66 +76,141 @@ function ToneMapViz({p}) {
 
 // ============== Pilot Polarity Clock ==============
 function PilotClockViz({c}) {
-  const N_EHT_SIG = 2;
-  const offset = E4.pilotOffsetForData(N_EHT_SIG);
-  const [sym, setSym] = useS4(0);
-  const idx = (sym + offset) % 127;
-  const pol = E4.PILOT_POL_127[idx];
-  const cx=160, cy=160, R=130;
+  // Symbol picker covers the whole PPDU — every preamble symbol + every Data
+  // symbol gets its own polarity-sequence index per IEEE 802.11be-2024 Eq. 36-87.
+  const N_EHT_SIG = 2;                              // canonical (EHT_SIG_MCS=0 → 2 syms)
+  const N_SYM_DATA = c.N_SYM;                       // number of Data OFDM symbols
+  // Build symbol list with their polarity-sequence index assignment.
+  const symList = [
+    { tag:'L-SIG',     idx:0 },
+    { tag:'RL-SIG',    idx:1 },
+    { tag:'U-SIG-1',   idx:2 },
+    { tag:'U-SIG-2',   idx:3 },
+  ];
+  for (let i = 0; i < N_EHT_SIG; i++) symList.push({ tag:`EHT-SIG-${i+1}`, idx: 4 + i });
+  for (let i = 0; i < N_SYM_DATA; i++) symList.push({ tag:`Data #${i}`,    idx: 4 + N_EHT_SIG + i });
+
+  const [pickIdx, setPickIdx] = useS4(4 + N_EHT_SIG);   // default: first Data symbol
+  // Find the row matching pickIdx, falling back to first row.
+  const pickRow = symList.find(s => s.idx === pickIdx) || symList[0];
+  const idxMod  = pickRow.idx % 127;
+  const p_n     = E4.PILOT_POL_127[idxMod];
+
+  // Pilot count per BW (Table 36-58)
+  const pilotCount = c.N_SP;
+  // For visual: show first 8 pilots (or all if fewer), with their pp index
+  const showCount = Math.min(8, pilotCount);
 
   return (
     <div className="panel">
-      <h2><span className="num">η</span>Pilot polarity clock <span className="desc">— IEEE 802.11-2020 §17.3.5.10 (127-element p_n) · IEEE 802.11be-2024 §36.3.13.11 (EHT pilot offset 4 + N_EHT-SIG)</span></h2>
-      <div style={{display:'grid', gridTemplateColumns:'320px 1fr', gap:24, alignItems:'center'}}>
-        <svg width="320" height="320" style={{display:'block'}}>
-          <circle cx={cx} cy={cy} r={R} fill="#fff" stroke="var(--line)" strokeWidth="1.5"/>
-          {E4.PILOT_POL_127.map((v,i)=>{
-            const a = (i/127)*2*Math.PI - Math.PI/2;
-            const r1 = R-12, r2 = R-2;
-            const x1 = cx+Math.cos(a)*r1, y1=cy+Math.sin(a)*r1;
-            const x2 = cx+Math.cos(a)*r2, y2=cy+Math.sin(a)*r2;
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={i===idx? '#ef4444': (v>0?'#3b82f6':'#94a3b8')}
-              strokeWidth={i===idx?3:1.5}/>;
-          })}
-          {/* arm */}
-          {(() => {
-            const a = (idx/127)*2*Math.PI - Math.PI/2;
-            return <line x1={cx} y1={cy} x2={cx+Math.cos(a)*(R-12)} y2={cy+Math.sin(a)*(R-12)}
-              stroke="#ef4444" strokeWidth="3" strokeLinecap="round"/>;
-          })()}
-          <circle cx={cx} cy={cy} r="6" fill="#ef4444"/>
-          <text x={cx} y={cy+50} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="22" fontWeight="700" fill="var(--accent)">p_n = {pol>0?'+1':'−1'}</text>
-          <text x={cx} y={cy+72} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="var(--ink-muted)">index {idx} / 127</text>
-        </svg>
-        <div>
-          <label style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>Data symbol n</label>
-          <input type="range" min={0} max={20} value={sym} onChange={e=>setSym(+e.target.value)}
-            style={{width:'100%', marginTop:6}}/>
-          <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:13, color:'var(--ink-dim)', marginTop:6}}>
-            <div>n = <b style={{color:'var(--accent)'}}>{sym}</b></div>
-            <div>offset = 4 + N_EHT-SIG = 4 + {N_EHT_SIG} = <b>{offset}</b></div>
-            <div>(n + offset) mod 127 = <b style={{color:'var(--green)'}}>{idx}</b></div>
-            <div>p_n = <b style={{color:'var(--orange)'}}>{pol}</b></div>
+      <h2><span className="num">η</span>Pilot polarity sequence
+        <span className="desc">— IEEE 802.11-2020 §17.3.5.10 (127-element p_n) · IEEE 802.11be-2024 §36.3.13.11 + Eq. 36-87 (per-symbol pilot values)</span>
+      </h2>
+
+      <div className="detail" style={{marginBottom:16, background:'var(--bg2)', border:'1px solid var(--line)'}}>
+        <strong>Why pilots?</strong> {pilotCount} of the {c.N_ST.toLocaleString()} active subcarriers carry a <em>known</em> ±1 value so
+        the receiver can track residual carrier-frequency offset and phase noise across each OFDM symbol.
+        <br/>
+        <strong>Pilot value formula</strong> (Eq. 36-87): &nbsp;<code style={{color:'var(--accent)', fontWeight:700}}>
+          pilot<sub>pp</sub>[n] = p<sub>n</sub> &nbsp;×&nbsp; Ψ<sub>(n + pp) mod 8</sub>
+        </code>
+        &nbsp;— two independent ±1 factors, one per symbol (anti-replay) and one per pilot subcarrier.
+      </div>
+
+      {/* ============== Step 1: pick which OFDM symbol ============== */}
+      <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6}}>
+        ① Pick a symbol — every preamble + Data symbol gets its own slot in the sequence
+      </div>
+      <div style={{display:'flex', gap:4, flexWrap:'wrap', marginBottom:14}}>
+        {symList.map(s => (
+          <button key={s.idx} onClick={()=>setPickIdx(s.idx)} style={{
+            padding:'6px 10px', borderRadius:5, fontSize:11,
+            background: s.idx === pickIdx ? 'var(--accent)' : 'var(--bg2)',
+            color:    s.idx === pickIdx ? '#fff'           : 'var(--ink-dim)',
+            border:`1px solid ${s.idx === pickIdx ? 'var(--accent)' : 'var(--line)'}`,
+            cursor:'pointer', fontFamily:'JetBrains Mono, monospace', fontWeight:600
+          }}>{s.tag} <span style={{opacity:0.7}}>· n={s.idx}</span></button>
+        ))}
+      </div>
+
+      {/* ============== Step 2: look up p_n in the 127-element strip ============== */}
+      <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6}}>
+        ② Look up p<sub>n</sub> in the 127-element polarity sequence (HE-inherited from §17.3.5.10)
+      </div>
+      <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:12, color:'var(--ink-dim)', marginBottom:6}}>
+        index = n mod 127 = {pickRow.idx} mod 127 = <b style={{color:'var(--green)'}}>{idxMod}</b>
+      </div>
+      <div style={{display:'flex', gap:1, height:34, padding:2, background:'var(--bg2)', border:'1px solid var(--line)', borderRadius:6, overflow:'hidden'}}>
+        {E4.PILOT_POL_127.map((v,i)=>(
+          <div key={i} title={`idx ${i} = ${v>0?'+1':'−1'}`} style={{
+            flex:'1 1 0', minWidth:5,
+            background: i === idxMod ? '#ef4444' : (v > 0 ? '#3b82f6' : '#94a3b8'),
+            border: i === idxMod ? '2px solid #b91c1c' : 'none',
+            boxSizing:'border-box'
+          }}/>
+        ))}
+      </div>
+      <div style={{fontFamily:'JetBrains Mono, monospace', fontSize:14, color:'var(--ink)', marginTop:8, fontWeight:600}}>
+        p<sub>n</sub> = <span style={{color:'#ef4444'}}>{p_n > 0 ? '+1' : '−1'}</span>
+        <span style={{fontSize:11, color:'var(--ink-muted)', fontWeight:400, marginLeft:10}}>
+          (red bar = current symbol · blue = +1 · grey = −1)
+        </span>
+      </div>
+
+      {/* ============== Step 3: per-pilot Ψ rotation ============== */}
+      <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginTop:18, marginBottom:6}}>
+        ③ Per-pilot Ψ rotation — Ψ = [+1, +1, +1, −1, −1, +1, +1, +1] cycles every 8 pilots (Eq. 27-104)
+      </div>
+      <div style={{display:'flex', gap:4, marginBottom:6}}>
+        {E4.PSI_8.map((v,i)=>(
+          <div key={i} style={{
+            width:42, height:42, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            border:'1px solid var(--line)', borderRadius:6,
+            background: v > 0 ? '#dbeafe' : '#fee2e2',
+            color:    v > 0 ? '#1e40af' : '#b91c1c',
+            fontFamily:'JetBrains Mono, monospace'
+          }}>
+            <div style={{fontSize:9, opacity:0.7}}>k={i}</div>
+            <div style={{fontSize:14, fontWeight:700}}>{v > 0 ? '+1' : '−1'}</div>
           </div>
-          <div style={{marginTop:14}}>
-            <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4}}>Per-SC base Ψ (8-element cyclic, Eq. 27-104)</div>
-            <div style={{display:'flex', gap:4}}>
-              {E4.PSI_8.map((v,i)=>(
-                <div key={i} style={{
-                  width:38, height:38, display:'flex', alignItems:'center', justifyContent:'center',
-                  border:'1px solid var(--line)', borderRadius:6,
-                  background: v>0?'#dbeafe':'#fee2e2',
-                  color: v>0?'#1e40af':'#b91c1c',
-                  fontFamily:'JetBrains Mono, monospace', fontWeight:700
-                }}>{v>0?'+1':'−1'}</div>
-              ))}
+        ))}
+      </div>
+
+      {/* ============== Step 4: final pilot values for this symbol ============== */}
+      <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginTop:18, marginBottom:6}}>
+        ④ Final pilot values for {pickRow.tag} (showing first {showCount} of {pilotCount} pilots — BW = {c.cfg && c.cfg.BW || c.N_20MHz*20} MHz)
+      </div>
+      <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+        {Array.from({length: showCount}).map((_, pp) => {
+          const k = (pickRow.idx + pp) % 8;
+          const psi = E4.PSI_8[k];
+          const pilot = p_n * psi;
+          return (
+            <div key={pp} style={{
+              minWidth:120, padding:'8px 10px', borderRadius:6,
+              border:'1px solid var(--line)', background:'#fff',
+              fontFamily:'JetBrains Mono, monospace', fontSize:11
+            }}>
+              <div style={{color:'var(--ink-muted)', fontSize:10}}>pilot pp = {pp}</div>
+              <div style={{color:'var(--ink-dim)', marginTop:2}}>
+                Ψ<sub>(n+pp) mod 8</sub> = Ψ<sub>{k}</sub> = <b style={{color: psi>0?'#1e40af':'#b91c1c'}}>{psi>0?'+1':'−1'}</b>
+              </div>
+              <div style={{marginTop:4, fontSize:14, fontWeight:700, color: pilot>0?'var(--green)':'var(--red)'}}>
+                p<sub>n</sub> × Ψ = {pilot > 0 ? '+1' : '−1'}
+              </div>
             </div>
-          </div>
-          <div className="detail" style={{marginTop:14}}>
-            Pilot value at SC pp, symbol n = p_n × Ψ[(n+pp−1) mod 8]. Advancing polarity acts as a per-symbol counter so RX detects skipped symbols.
-          </div>
-        </div>
+          );
+        })}
+      </div>
+
+      <div className="detail" style={{marginTop:14, fontSize:11, lineHeight:1.6}}>
+        <strong>Why advance per symbol?</strong> If a receiver mis-counts OFDM symbols (e.g. a glitch drops one), the pilot
+        polarity will be wrong on subsequent symbols → the RX's channel estimator sees a sign-flip on every pilot and can flag
+        the loss. So p<sub>n</sub> is both a phase reference AND a per-symbol counter.
+        <br/>
+        <strong>Why both p<sub>n</sub> and Ψ?</strong> Ψ varies pilot-to-pilot (frequency-domain whitening of pilot tones,
+        prevents PAPR concentration). p<sub>n</sub> varies symbol-to-symbol (counter). Their product gives every (symbol, pilot)
+        cell a deterministic ±1 value that's known to both TX and RX without explicit signalling.
       </div>
     </div>
   );
