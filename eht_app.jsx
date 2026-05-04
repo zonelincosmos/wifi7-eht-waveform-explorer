@@ -227,7 +227,7 @@ function App() {
         <Section {...SECTIONS[5]}>
           <window.IFFTViz />
           <window.CPISIViz />
-          <window.PEWindowViz />
+          <window.PEWindowViz c={c} />
         </Section>
 
         {/* VII. Multi-User OFDMA — RU / MRU layouts that split SCs across users. */}

@@ -57,7 +57,7 @@
     // T_EHT_LTF_SYM = T_DFT + T_GI; T_DFT = 12.8 (4x) or 6.4 (2x). Per IEEE 802.11be-2024 §36.3.6.
     const NEHT_LTF = (p.LTFType === 4 ? 12.8 : 6.4) + p.GI;
     return [
-      { name:'L-STF',    us:8.0,  color:'#fde4b8', desc:'Legacy STF — AGC, timing sync, coarse freq offset. 12 nonzero SCs every 4th, BPSK, 10× 0.8 µs.' },
+      { name:'L-STF',    us:8.0,  color:'#fde4b8', desc:'Legacy STF — AGC, timing sync, coarse freq offset. 12 nonzero SCs every 4th, values (±1±j)/√2 per Eq. 19-8, 10× 0.8 µs.' },
       { name:'L-LTF',    us:8.0,  color:'#e6d5f5', desc:'Legacy LTF — channel estimation for L-SIG. 52 nonzero SCs, 1.6µs double-GI + 2× 3.2µs symbols.' },
       { name:'L-SIG',    us:4.0,  color:'#c8e6ec', desc:'Legacy SIG — 24 bits BCC R=1/2 BPSK. RATE=0xD, LENGTH (12b), parity, tail. LENGTH mod 3 = 0 differentiates EHT vs HE.' },
       { name:'RL-SIG',   us:4.0,  color:'#cfe9d4', desc:'Repeated L-SIG. Same content as L-SIG but pilot polarity p_1. NOT Q-BPSK rotated.' },
@@ -203,11 +203,11 @@
     const N_CBPSshort = N_SDshort * N_BPSCS;
     const N_DBPSshort = Math.floor(N_CBPSshort * m.Rn / m.Rd);
 
-    // NumMPDUs auto-bump: each MPDU subframe is constrained by the 4095-byte
-    // EHT MPDU limit; we approximate by APEP / 4102 = APEP / (4095 + 7-byte
-    // delim+pad). Matches build_ampdu's chunk-sizing behavior closely enough
-    // for displayed length pipeline.
-    const N_min = Math.max(1, Math.ceil((APEP - 4) / 4102));
+    // NumMPDUs auto-bump: matches Python ref/wifi7-python/eht_waveform_gen.py:
+    //   denom = max_chunk_per_mpdu(4065) + per_mpdu_overhead(34) - 4 + max_align_pad(3) = 4098
+    //   N_min = ceil((APEP - 4) / 4098)
+    // (an earlier comment said "4095+7=4102" but the spec value is 4098).
+    const N_min = Math.max(1, Math.ceil((APEP - 4) / 4098));
     const NumMPDUs = Math.max(p.NumMPDUs || 1, N_min);
 
     // ----------------------------------------------------------------
@@ -262,9 +262,35 @@
     const data_samps = N_SYM * (NFFT + CP_data);
 
     // ----------------------------------------------------------------
-    // Field samples + TXTIME
+    // Field samples + TXTIME — port of ref/wifi7-python/eht_config.py:498-555
     // ----------------------------------------------------------------
-    const PE_us = 4.0;
+    // N_EHT_SIG from EHT_SIG_MCS via eht_sig_mcs_table (eht_constants.py:241-244):
+    //   MCS 0 → 2 syms · 4 µs = 8 µs (canonical default)
+    //   MCS 1 → 1 sym  · 4 µs = 4 µs
+    //   MCS 2 → 1 sym  · 4 µs = 4 µs
+    //   MCS 3 → 4 syms · 4 µs = 16 µs
+    const EHT_SIG_MCS = p.EHT_SIG_MCS != null ? p.EHT_SIG_MCS : 0;
+    const N_EHT_SIG_TABLE = {0:2, 1:1, 2:1, 3:4};
+    const N_EHT_SIG = N_EHT_SIG_TABLE[EHT_SIG_MCS] != null ? N_EHT_SIG_TABLE[EHT_SIG_MCS] : 2;
+    // 1-SS SU minimum; multi-SS not modeled here (eht_config.py:455).
+    const N_EHT_LTF = 1;
+
+    // T_PE per Table 36-61: rows = a (1..4), cols = NominalPacketPadding (0/8/16/20).
+    // a per Eq. (36-58)/(36-59):
+    //   if has_extra and a_init==4 → a = 1
+    //   else if has_extra          → a = a_init + 1
+    //   else                       → a = a_init
+    const a_pad = has_extra ? (a_init === 4 ? 1 : a_init + 1) : a_init;
+    const PE_TABLE = {
+      1: { 0:0, 8:0,  16:4,  20:8  },
+      2: { 0:0, 8:0,  16:8,  20:12 },
+      3: { 0:0, 8:4,  16:12, 20:16 },
+      4: { 0:0, 8:8,  16:16, 20:20 }
+    };
+    const NominalPacketPadding = p.NominalPacketPadding != null ? p.NominalPacketPadding : 16;
+    const PE_us = (PE_TABLE[a_pad] && PE_TABLE[a_pad][NominalPacketPadding] != null)
+                  ? PE_TABLE[a_pad][NominalPacketPadding] : 4;
+
     // T_EHT_LTF_SYM = T_DFT + T_GI per Table 36-36; T_DFT = 12.8 (4x) or 6.4 (2x).
     const NEHT_LTF_us = (p.LTFType === 4 ? 12.8 : 6.4) + p.GI;
     const fieldUs = {
@@ -273,9 +299,9 @@
       'L-SIG':   4,
       'RL-SIG':  4,
       'U-SIG':   8,
-      'EHT-SIG': 8,
+      'EHT-SIG': N_EHT_SIG * 4,
       'EHT-STF': 4,
-      'EHT-LTF': NEHT_LTF_us,
+      'EHT-LTF': N_EHT_LTF * NEHT_LTF_us,
       'Data':    T_DATA_us,
       'PE':      PE_us
     };
@@ -306,6 +332,8 @@
       N_PAD, N_PAD_MAC_bytes, N_PAD_PHY_bits, PSDU_bytes,
       // Time domain (oversampled to fs=480 MHz, NFFT=6144)
       TSYM_us, T_DATA_us, NFFT, CP_data, data_samps,
+      // Pre-EHT preamble symbol counts
+      EHT_SIG_MCS, N_EHT_SIG, N_EHT_LTF, NominalPacketPadding, a_pad, PE_us,
       fieldUs, TXTIME, total_samps, LSIG_LEN,
       phy_rate_Mbps, mac_throughput_Mbps,
       // A-MPDU summary + EXACT byte map (faithful port of
@@ -572,14 +600,20 @@
     }
   })();
 
-  // Verify canonical reference case length pipeline (PIPELINE_OVERVIEW.md §9).
+  // Verify canonical reference case length pipeline against Python eht_config
+  // (run directly: python -c "from eht_config import _ldpc_params; print(_ldpc_params(47040,5,6,5000,16,11808))").
+  // NOTE: PIPELINE_OVERVIEW.md §9 lines 843-848 show N_avbits=94080, N_punc=0,
+  // N_rep=34996 — those are pre-EHT (HT-style) Eq. 19-37/-38 values. Python's
+  // _ldpc_params and the JS port both apply the EHT Eq. 36-55 override which
+  // gives N_avbits=58848, N_punc=236, N_rep=0. The doc is wrong here; the JS
+  // and Python algorithms agree.
   (function _refSelfTest(){
     const c = compute({ BW:320, MCS:13, APEP:5000, GI:3.2, LTFType:4, NumMPDUs:1, Coding:'LDPC' });
     const expect = {
       N_CBPS:47040, N_DBPS:39200, N_DBPSshort:9840,
       N_pld_raw:40016, N_Excess:816, a_init:1, N_SYM_init:2,
-      N_pld:49040, L_LDPC:1944, N_CW:31, N_shrt:1180, N_punc:0, N_rep:34996,
-      N_SYM:2, N_avbits:94080, N_PAD:9024, N_PAD_MAC_bytes:1128, N_PAD_PHY_bits:0,
+      N_pld:49040, L_LDPC:1944, N_CW:31, N_shrt:1180, N_punc:236, N_rep:0,
+      N_SYM:2, N_avbits:58848, N_PAD:9024, N_PAD_MAC_bytes:1128, N_PAD_PHY_bits:0,
       PSDU_bytes:6128, NFFT:6144, CP_data:1536, TSYM_us:16.0, T_DATA_us:32.0,
       data_samps:15360, TXTIME:96.0, total_samps:46080, LSIG_LEN:54, phy_rate_Mbps:2450
     };

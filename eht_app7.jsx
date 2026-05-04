@@ -170,21 +170,37 @@ function OFDMARUViz() {
   );
 }
 // =============== Packet Extension + windowing ===============
-function PEWindowViz() {
-  const [pe, setPe] = useS7(8);
+function PEWindowViz({c}) {
+  // Live derived value from compute() — the actual T_PE depends on
+  // (a, NominalPacketPadding) per Table 36-61. The buttons below let the user
+  // explore — they only change the local NominalPacketPadding selector for the
+  // viz (c.NominalPacketPadding from the global params is the live default).
+  const [nomPE, setNomPE] = useS7(c?.NominalPacketPadding ?? 16);
+  // Re-derive T_PE for the local nomPE choice (table 36-61). a is from c.a_pad.
+  const PE_TABLE = {
+    1: { 0:0, 8:0,  16:4,  20:8  },
+    2: { 0:0, 8:0,  16:8,  20:12 },
+    3: { 0:0, 8:4,  16:12, 20:16 },
+    4: { 0:0, 8:8,  16:16, 20:20 }
+  };
+  const a_pad = c?.a_pad ?? 1;
+  const pe = (PE_TABLE[a_pad] && PE_TABLE[a_pad][nomPE] != null) ? PE_TABLE[a_pad][nomPE] : 0;
   return (
     <div className="panel">
-      <h2><span className="num">ζ₂</span>Packet Extension &amp; T_TR window <span className="desc">— IEEE 802.11be-2024 §36.3.13 · Table 36-61 (T_PE) · the last DATA symbol fades through a 100 ns rolloff, then PE follows for RX processing</span></h2>
-      <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:14}}>
-        <span style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>PE size</span>
+      <h2><span className="num">ζ₂</span>Packet Extension &amp; T_TR window <span className="desc">— IEEE 802.11be-2024 §36.3.13 · Table 36-61 · T_PE depends on BOTH NominalPacketPadding (TX policy) and a (post-FEC pad factor); two-step lookup shown below</span></h2>
+      <div style={{display:'flex', gap:14, alignItems:'center', marginBottom:14, flexWrap:'wrap'}}>
+        <span style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>NominalPacketPadding (input)</span>
         {[0, 8, 16, 20].map(v=>(
-          <button key={v} onClick={()=>setPe(v)} style={{
+          <button key={v} onClick={()=>setNomPE(v)} style={{
             padding:'6px 12px', fontSize:11, borderRadius:5,
-            background:pe===v?'var(--orange)':'#fff', color:pe===v?'#fff':'var(--ink-dim)',
-            border:`1px solid ${pe===v?'var(--orange)':'var(--line)'}`,
+            background:nomPE===v?'var(--orange)':'#fff', color:nomPE===v?'#fff':'var(--ink-dim)',
+            border:`1px solid ${nomPE===v?'var(--orange)':'var(--line)'}`,
             cursor:'pointer', fontFamily:'JetBrains Mono, monospace', fontWeight:600
           }}>{v} µs</button>
         ))}
+        <span style={{fontSize:11, color:'var(--ink-muted)', marginLeft:14}}>
+          live a = <b>{a_pad}</b> · table 36-61[a={a_pad}][NomPE={nomPE}] = derived T_PE = <b>{pe} µs</b>
+        </span>
       </div>
 
       {/* Schematic layout — three blocks separated by gaps. Strictly

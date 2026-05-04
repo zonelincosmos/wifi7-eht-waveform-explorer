@@ -25,7 +25,7 @@ const PIPELINE_STEPS = [
   { id:13, group:'OFDM',  name:'IFFT per chain',               desc:'Each TX chain runs an N_FFT-point IFFT over its frequency-domain symbol.' },
   { id:14, group:'OFDM',  name:'Cyclic prefix prepend',        desc:'Copy last GI µs (0.8/1.6/3.2) to front of each symbol — protects against multipath ≤ GI.' },
   { id:15, group:'OFDM',  name:'Window / overlap',             desc:'Apply T_TR=100 ns raised-cosine ramp; adjacent symbols overlap-add to soften spectral edges.' },
-  { id:16, group:'TX',    name:'PHY preamble preceeds',        desc:'L-STF→L-LTF→L-SIG→RL-SIG→U-SIG→EHT-SIG→EHT-STF→EHT-LTF inserted before data symbols.' },
+  { id:16, group:'TX',    name:'PHY preamble precedes',        desc:'L-STF→L-LTF→L-SIG→RL-SIG→U-SIG→EHT-SIG→EHT-STF→EHT-LTF inserted before data symbols.' },
   { id:17, group:'TX',    name:'DAC + RF up-conversion',       desc:'Digital baseband → analog → mix to carrier (channel center). Per-antenna chain output.' },
   { id:18, group:'TX',    name:'On-air',                       desc:'Radiated waveform; RX inverts every step exactly (FFT, demap, decode, descramble, CRC check).' },
 ];

@@ -8,18 +8,21 @@
 
 const { useState: useS5, useEffect: useE5, useRef: useR5, useMemo: useM5 } = React;
 
-// 12 nonzero L-STF subcarriers (one per 4 bins, ±26 range, normalized later)
-// Spec Eq. 17-8: S_-26..26 every 4th bin, sqrt(13/6) magnitude
+// 12 nonzero L-STF subcarriers (one per 4 bins, ±26 range, normalized later).
+// Spec Eq. 19-8: S_-26..26 = sqrt(1/2)·(±1±j) at every 4th SC. The legacy
+// 802.11a Eq. 17-8 (sqrt(13/6) magnitude) is no longer used; modern HT/VHT/HE/EHT
+// receivers all use Eq. 19-8 values.
 const LSTF_TONES_20 = [-24,-20,-16,-12,-8,-4,4,8,12,16,20,24];
 
 // =============== §7.7 L-STF freq comb + replication ===============
 function LSTFViz({p}) {
   const ref = useR5(null);
   const N20 = ({20:1,40:2,80:4,160:8,320:16})[p.BW];
-  // Per-segment K_Shift (table 36-25 approximation: each 20-MHz subblock shifted in 256-sized FFT)
+  // Per-segment K_Shift (§36.3.12.3 / Table 36-26 — each 20 MHz subblock shifted
+  // by an integer number of pre-EHT FFT bins relative to centre).
   const shiftStep = 256;
-  // For visualization, we plot in pre-EHT FFT space: 256, 512, 1024, ..., 4096 = NFFT/4
-  // Use NFFT_pre = NFFT/4 = 1536 for 320 MHz (4× SC ratio)
+  // For visualization we plot in pre-EHT FFT space (1× sample rate).
+  // pre-EHT NFFT scales as: 64 (20 MHz), 128 (40), 256 (80), 512 (160), 1024 (320).
   const NFFTpre = ({20:64,40:128,80:256,160:512,320:1024})[p.BW];
 
   useE5(()=>{
@@ -84,8 +87,8 @@ function LSTFViz({p}) {
       <div className="detail" style={{marginTop:12}}>
         Sparse comb in frequency ⇒ short repetition in time. The IFFT of a comb-spaced spectrum is a periodic train, so the L-STF
         repeats 10× within its 8 µs envelope. RX correlator catches it for packet detection / AGC / coarse timing.
-        Each 20 MHz subblock carries the same 12 ±1 base values (with phase rotation γ). Replication preserves
-        legacy receivers' ability to detect L-STF first.
+        Each 20 MHz subblock carries the same 12 base values (1/√2)·(±1±j) per Eq. 19-8 (with phase rotation γ).
+        Replication preserves legacy receivers' ability to detect L-STF first.
       </div>
     </div>
   );

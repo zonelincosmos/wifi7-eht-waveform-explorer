@@ -80,17 +80,21 @@ function bitsToHex(bits) {
   }
   return s.toUpperCase();
 }
+// Integer convention: X₁ = MSB (bit 10), X₁₁ = LSB (bit 0). This matches
+// ref/wifi7-python/modulation/scrambler.py and eht_pipeline.jsx (line 201,
+// `reg[i] = (init >> (10-i)) & 1`). Seed integer 1 ("0x001") therefore means
+// "lone X₁₁ = 1" in spec notation, NOT "lone X₁ = 1".
 function seedToInt(seed) {
   let v = 0;
-  for (let i = 0; i < 11; i++) if (seed[i]) v |= (1 << i);
+  for (let i = 0; i < 11; i++) if (seed[i]) v |= (1 << (10 - i));
   return v;
 }
 
 const SEED_PRESETS = [
-  { label: 'all-1s · 0x7FF',  bits: [1,1,1,1,1,1,1,1,1,1,1], note: 'Spec NOTE 1 test vector' },
-  { label: '0x72E',           bits: [0,1,1,1,0,0,1,0,1,1,1], note: 'pass-case from §36 NOTE' },
-  { label: '0x555 · alt',     bits: [1,0,1,0,1,0,1,0,1,0,1], note: 'palindrome' },
-  { label: '0x001 · minimal', bits: [1,0,0,0,0,0,0,0,0,0,0], note: 'lone X₁=1' }
+  { label: 'all-1s · 0x7FF',   bits: [1,1,1,1,1,1,1,1,1,1,1], note: 'Spec NOTE 1 test vector' },
+  { label: '0x555 · palindrome', bits: [1,0,1,0,1,0,1,0,1,0,1], note: 'X₁=X₃=X₅=X₇=X₉=X₁₁=1' },
+  { label: '0x400 · lone X₁',  bits: [1,0,0,0,0,0,0,0,0,0,0], note: 'X₁=1, all others 0 (=integer 1024)' },
+  { label: '0x001 · lone X₁₁', bits: [0,0,0,0,0,0,0,0,0,0,1], note: 'X₁₁=1 (=Python init_state=1)' }
 ];
 
 // SERVICE field reference: with seed=all-1s, the first 16 PN bits are:

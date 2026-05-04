@@ -866,24 +866,33 @@ function BCCTrellisViz({ p }) {
   const [bitInput, setBitInput] = useState8('1101001');
   const bits = bitInput.split('').filter(c => c === '0' || c === '1').map(c => +c);
 
-  // Walk the 64-state shift register
+  // Walk the 64-state shift register. At step n, with old state sr_old =
+  // [u_{n-1},…,u_{n-6}] (bits 5..0), the full 7-bit register that the K=7
+  // generators sample is reg7 = [u_n, u_{n-1},…,u_{n-6}] (bit 6 .. bit 0).
+  // The NEW state must drop u_{n-6} (the oldest tap that falls off).
+  // Earlier code had `sr = ((sr<<1)|b) & 0x3F` BEFORE building reg7, which
+  // duplicated u_n at bit 0 of reg7 and silently discarded u_{n-6}; that
+  // produced wrong A/B outputs (e.g. step 1 with u=1 gave A=B=0 instead of
+  // the correct A=B=1). Compute reg7 FIRST, then shift the state.
   const states = [0];
   const outputs = [];
   let sr = 0;
+  // g0 = 133 octal = 0b1011011, g1 = 171 octal = 0b1111001
+  // Bit indices used by the polynomial taps map to positions in reg7
+  // where bit j corresponds to u_{n-6+j} (i.e. bit 6 = current u_n, bit 0
+  // = u_{n-6}).  This matches ref/wifi7-python/coding/bcc_encoder.py.
+  const G0 = 0b1011011;
+  const G1 = 0b1111001;
   for (const b of bits) {
-    sr = ((sr << 1) | b) & 0x3F;             // shift and mask to 6 bits (state)
-    states.push(sr);
-    // g0 = 133 octal = 0b1011011, g1 = 171 octal = 0b1111001
-    // Compute parity using full 7-bit register (bit + previous 6 state bits)
-    const reg7 = ((b << 6) | sr) & 0x7F;     // {data, prev6}
+    const reg7 = ((b << 6) | sr) & 0x7F;       // current u_n + previous 6 bits
     let A = 0, B = 0;
-    const G0 = 0b1011011;
-    const G1 = 0b1111001;
     for (let j = 0; j < 7; j++) {
       A ^= ((reg7 >> j) & 1) & ((G0 >> j) & 1);
       B ^= ((reg7 >> j) & 1) & ((G1 >> j) & 1);
     }
     outputs.push([A, B]);
+    sr = (reg7 >> 1) & 0x3F;                   // new 6-bit state (drops u_{n-6})
+    states.push(sr);
   }
 
   const W = 920, H = 380;
