@@ -169,13 +169,12 @@ function OFDMARUViz() {
     </div>
   );
 }
-// =============== §18.7 Packet Extension + windowing ===============
+// =============== Packet Extension + windowing ===============
 function PEWindowViz() {
   const [pe, setPe] = useS7(8);
-  const symbolBody = 60;
   return (
     <div className="panel">
-      <h2><span className="num">ζ₂</span>Packet Extension &amp; T_TR window <span className="desc">— IEEE 802.11be-2024 §36.3.13 · Table 36-61 (T_PE) · last symbol decays through T_TR so spectral leakage is bounded</span></h2>
+      <h2><span className="num">ζ₂</span>Packet Extension &amp; T_TR window <span className="desc">— IEEE 802.11be-2024 §36.3.13 · Table 36-61 (T_PE) · the last DATA symbol fades through a 100 ns rolloff, then PE follows for RX processing</span></h2>
       <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:14}}>
         <span style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>PE size</span>
         {[0, 8, 16, 20].map(v=>(
@@ -187,48 +186,103 @@ function PEWindowViz() {
           }}>{v} µs</button>
         ))}
       </div>
-      <svg width="100%" height="160" viewBox="0 0 800 160" style={{background:'#fafcff', borderRadius:8, border:'1px solid var(--line)'}}>
+
+      {/* Schematic layout — three blocks separated by gaps. Strictly
+          NOT-TO-SCALE: T_TR (100 ns) and T_PE (0..20 µs) differ by 200×;
+          drawing them in proportion would make T_TR a sub-pixel sliver.
+          The gap between blocks is intentional, marked "schematic". */}
+      <svg width="100%" height="180" viewBox="0 0 800 180" style={{background:'#fafcff', borderRadius:8, border:'1px solid var(--line)'}}>
         <defs>
+          <linearGradient id="ttr-grad" x1="0%" x2="100%">
+            <stop offset="0%"   stopColor="#3b82f6" stopOpacity="0.85"/>
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.05"/>
+          </linearGradient>
           <linearGradient id="pe-grad" x1="0%" x2="100%">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0.8"/>
-            <stop offset="80%" stopColor="#f97316" stopOpacity="0.5"/>
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0"/>
+            <stop offset="0%"   stopColor="#f97316" stopOpacity="0.85"/>
+            <stop offset="100%" stopColor="#f97316" stopOpacity="0.4"/>
           </linearGradient>
         </defs>
-        {/* timeline base */}
-        <line x1="20" y1="120" x2="780" y2="120" stroke="#cbd5e1" strokeWidth="1"/>
-        {/* DATA symbols */}
-        {Array.from({length:5}).map((_,i)=>(
-          <rect key={i} x={20 + i*symbolBody*0.9} y={50} width={symbolBody*0.85} height={70} fill="#3b82f6" opacity={0.85} stroke="#1d4ed8"/>
+
+        {/* baseline */}
+        <line x1="20" y1="135" x2="780" y2="135" stroke="#cbd5e1" strokeWidth="1"/>
+
+        {/* ===== Block A: trailing DATA symbols (300 px wide) ===== */}
+        {Array.from({length:3}).map((_,i)=>(
+          <rect key={i} x={20 + i*92} y={55} width={86} height={80}
+                fill="#3b82f6" opacity={0.85} stroke="#1d4ed8" strokeWidth="1.5"/>
         ))}
-        <text x={20 + 2.5*symbolBody*0.9} y={45} fontSize="11" textAnchor="middle" fill="#1d4ed8" fontWeight="700">DATA symbols (last 5 shown)</text>
-        {/* T_TR window edge — raised cosine ramp on right of last symbol */}
-        <path d={`M ${20 + 4.85*symbolBody*0.9} 50 Q ${20 + 4.95*symbolBody*0.9} 60, ${20 + 5.05*symbolBody*0.9} 80 T ${20 + 5.2*symbolBody*0.9} 120 L ${20 + 5.2*symbolBody*0.9} 50 Z`} fill="#fbbf24" opacity="0.7" stroke="#d97706"/>
-        <text x={20 + 5.05*symbolBody*0.9} y={45} fontSize="10" textAnchor="middle" fill="#d97706" fontWeight="700">T_TR=100ns</text>
-        {/* PE */}
-        {pe>0 && (
+        <text x={20 + 1.5*92 + 43} y={50} fontSize="12" textAnchor="middle" fill="#1d4ed8" fontWeight="700">
+          last 3 DATA symbols
+        </text>
+        <text x={20 + 1.5*92 + 43} y={155} fontSize="11" textAnchor="middle" fill="#1d4ed8" fontFamily="JetBrains Mono, monospace">
+          each = T_SYM (12.8 + GI µs)
+        </text>
+
+        {/* gap between A and B with "//"  break-mark */}
+        <text x="320" y="100" fontSize="20" textAnchor="middle" fill="#94a3b8">⌇</text>
+
+        {/* ===== Block B: T_TR ramp (340..440 px) — exaggerated for visibility ===== */}
+        <rect x="340" y="55" width="100" height="80" fill="url(#ttr-grad)" stroke="#1d4ed8" strokeWidth="1.5"/>
+        {/* fade curve overlay */}
+        <path d="M 340 55 L 340 135 L 440 135 Q 420 105, 410 75 Q 395 60, 340 55 Z"
+              fill="#fbbf24" opacity="0.6" stroke="#d97706" strokeWidth="1"/>
+        <text x="390" y="50" fontSize="12" textAnchor="middle" fill="#d97706" fontWeight="700">T_TR rolloff</text>
+        <text x="390" y="155" fontSize="11" textAnchor="middle" fill="#d97706" fontFamily="JetBrains Mono, monospace">
+          100 ns (raised-cosine)
+        </text>
+        <text x="390" y="170" fontSize="9" textAnchor="middle" fill="#94a3b8" fontStyle="italic">
+          shown 200× larger than to-scale
+        </text>
+
+        {/* gap between B and C */}
+        <text x="465" y="100" fontSize="20" textAnchor="middle" fill="#94a3b8">⌇</text>
+
+        {/* ===== Block C: Packet Extension (490..760 px) ===== */}
+        {pe > 0 ? (
           <>
-            <rect x={20 + 5.2*symbolBody*0.9} y={50} width={pe*8} height={70} fill="url(#pe-grad)"/>
-            <text x={20 + 5.2*symbolBody*0.9 + pe*4} y={45} fontSize="11" textAnchor="middle" fill="#d97706" fontWeight="700">PE = {pe} µs</text>
-            <text x={20 + 5.2*symbolBody*0.9 + pe*4} y={140} fontSize="10" textAnchor="middle" fill="var(--ink-muted)" fontFamily="JetBrains Mono, monospace">RX processing pad</text>
+            <rect x="490" y="55" width="270" height="80" fill="url(#pe-grad)" stroke="#c2410c" strokeWidth="1.5"/>
+            <text x="625" y="50" fontSize="12" textAnchor="middle" fill="#c2410c" fontWeight="700">
+              Packet Extension · T_PE = {pe} µs
+            </text>
+            <text x="625" y="100" fontSize="11" textAnchor="middle" fill="#7c2d12" fontFamily="JetBrains Mono, monospace" fontWeight="600">
+              RX has T_PE to finish LDPC
+            </text>
+            <text x="625" y="118" fontSize="11" textAnchor="middle" fill="#7c2d12" fontFamily="JetBrains Mono, monospace" fontWeight="600">
+              before BlockAck deadline
+            </text>
+            <text x="625" y="155" fontSize="11" textAnchor="middle" fill="#c2410c" fontFamily="JetBrains Mono, monospace">
+              {pe} µs · {pe * 480} samples @ 480 MHz
+            </text>
+          </>
+        ) : (
+          <>
+            <rect x="490" y="55" width="270" height="80" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 4"/>
+            <text x="625" y="100" fontSize="12" textAnchor="middle" fill="#64748b" fontStyle="italic">
+              T_PE = 0 (PE omitted)
+            </text>
+            <text x="625" y="155" fontSize="11" textAnchor="middle" fill="#94a3b8" fontFamily="JetBrains Mono, monospace">
+              no extra processing pad
+            </text>
           </>
         )}
-        {/* µs ticks */}
-        {[0, 16, 32, 48, 64, 80].map((t,i)=>(
-          <g key={i}>
-            <line x1={20 + i*symbolBody*0.9} y1="120" x2={20 + i*symbolBody*0.9} y2="125" stroke="#94a3b8"/>
-            <text x={20 + i*symbolBody*0.9} y="138" fontSize="10" textAnchor="middle" fill="#94a3b8" fontFamily="JetBrains Mono, monospace">{t}µs</text>
-          </g>
-        ))}
       </svg>
+
       <div className="detail" style={{marginTop:12}}>
-        Two things happen at the end of every PPDU:
+        Two distinct things happen at the end of every PPDU:
         <br/>
-        <strong>① T_TR window</strong> — the last 100 ns of the final symbol is multiplied by a raised-cosine ramp so spectral
-        side-lobes don't violate the spectral mask. (Same window applies between symbols via overlap-add.)
+        <strong>① T_TR window</strong> (only ~100 ns) — the trailing edge of the last DATA symbol is multiplied by a
+        raised-cosine ramp so out-of-band spectral side-lobes don't violate the spectral mask. The same window also
+        joins symbol n's tail onto symbol n+1's head via overlap-add.
         <br/>
-        <strong>② Packet Extension</strong> — extra padding (4/8/16 µs) signalled in U-SIG, giving the RX time to finish
-        LDPC decoding the last symbol before it has to send back the BlockAck. Larger MCS / larger PSDU → larger PE.
+        <strong>② Packet Extension</strong> (T_PE = 0 / 8 / 16 / 20 µs, signalled in U-SIG) — extra padding samples
+        whose only job is to give the RX time to finish LDPC decoding the last symbol before the SIFS-bounded BlockAck
+        deadline. Higher MCS → larger codewords → bigger PE budget. Per Table 36-61 the exact T_PE depends on a_init
+        and NominalPacketPadding.
+        <br/>
+        <span style={{color:'var(--ink-muted)', fontSize:11}}>
+          The two regions are drawn schematically, not in proportion: a real T_TR (100 ns) is ~200× shorter than a
+          16 µs PE, so a strict timeline would make T_TR a sub-pixel line.
+        </span>
       </div>
     </div>
   );
