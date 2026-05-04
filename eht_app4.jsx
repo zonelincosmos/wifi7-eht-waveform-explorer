@@ -242,36 +242,47 @@ function ConstellationExplorer({c}) {
 
 // ============== A-MPDU byte table ==============
 function AMPDUBytesViz({c}) {
-  const APEP = c.APEP;
-  const total = c.PSDU_bytes;
-  // APEP_LENGTH covers the entire A-MPDU pre-EOF region:
-  //   APEP = Delim(4) + MAC_hdr(26) + Body + FCS(4)   ⇒ Body = APEP − 34
-  // PSDU then appends EOF-padding subframes:
-  //   PSDU = APEP + N_PAD_MAC_bytes
-  // For the canonical case APEP=5000 → Body=4966, EOF pad=1128 → PSDU=6128. ✓
-  const bodyLen = APEP - 4 - 26 - 4;
-  const padBytes = total - APEP;
-  const eofCount = Math.floor(padBytes / 4);
-  // build region map
-  const regions = [
-    { len:4,        color:'#fbcfe8', label:'Delim',     hex:'35 EA 6E 4E' },
-    { len:26,       color:'#ddd6fe', label:'MAC Header',hex:'88 01 …' },
-    { len:bodyLen,  color:'#bfdbfe', label:'Body',      hex:`${bodyLen.toLocaleString()} bytes` },
-    { len:4,        color:'#bbf7d0', label:'FCS',       hex:'CRC-32' },
-    ...(eofCount>0 ? [{ len:eofCount*4, color:'#fed7aa', label:`${eofCount}× EOF Pad`, hex:'01 00 9E 4E ×'+eofCount }] : [])
-  ];
-  // sub-byte phy padding
-  if (c.N_PAD_PHY_bits>0) regions.push({ len:0, color:'#fee2e2', label:`+ ${c.N_PAD_PHY_bits}b PHY pad`, hex:'sub-byte' });
+  const APEP        = c.APEP;
+  const total       = c.PSDU_bytes;
+  const numMpdus    = c.NumMPDUs || 1;
+  // Per IEEE 802.11-2024 §10.12.7 + ref/wifi7-python/utils/ampdu.py::build_ampdu:
+  // each subframe = delim(4) + MAC(26) + chunk + FCS(4) + align(0..3).
+  // We split the APEP region equally across NumMPDUs subframes for the
+  // educational view (matches the spec formula PSDU = APEP + N_PAD_MAC_bytes).
+  // Real build_ampdu output may shift 0..3 bytes per subframe into the EOF
+  // region due to 4-byte alignment; for canonical APEP=5000/NumMPDUs=2 the
+  // actual chunk is 2461 (1-byte align) instead of 2466 (no align).
+  const subframeApprox = APEP / numMpdus;
+  const chunkApprox    = Math.floor(subframeApprox) - 4 - 26 - 4;
+  const padBytes       = total - APEP;
+  const eofCount       = Math.floor(padBytes / 4);
+
+  // build region map: NumMPDUs × {Delim, MAC, Body, FCS} + EOF pad
+  const regions = [];
+  for (let i = 0; i < numMpdus; i++) {
+    const lab = numMpdus > 1 ? ` #${i+1}` : '';
+    regions.push({ len:4,           color:'#fbcfe8', label:'Delim'+lab,      hex:'4 B · CRC-8 · Sig 0x4E' });
+    regions.push({ len:26,          color:'#ddd6fe', label:'MAC Header'+lab, hex:'26 B · 88 01 …' });
+    regions.push({ len:chunkApprox, color:'#bfdbfe', label:'Body'+lab,       hex:`≈ ${chunkApprox.toLocaleString()} B` });
+    regions.push({ len:4,           color:'#bbf7d0', label:'FCS'+lab,        hex:'CRC-32' });
+  }
+  if (eofCount > 0) {
+    regions.push({ len: eofCount*4, color:'#fed7aa', label:`${eofCount}× EOF Pad`, hex:'01 00 9E 4E ×'+eofCount });
+  }
+  if (c.N_PAD_PHY_bits > 0) {
+    regions.push({ len:0, color:'#fee2e2', label:`+ ${c.N_PAD_PHY_bits}b PHY pad`, hex:'sub-byte' });
+  }
+
   return (
     <div className="panel">
-      <h2><span className="num">ι</span>A-MPDU byte layout <span className="desc">— IEEE 802.11-2024 §10.12.7 (A-MPDU pre-EOF padding) · APEP = {APEP.toLocaleString()} bytes → PSDU = {total.toLocaleString()} bytes after EOF-padding delimiters</span></h2>
+      <h2><span className="num">ι</span>A-MPDU byte layout <span className="desc">— IEEE 802.11-2024 §10.12.7 · APEP = {APEP.toLocaleString()} B → PSDU = {total.toLocaleString()} B · NumMPDUs = {numMpdus} (auto-bump = ⌈(APEP−4)/4102⌉)</span></h2>
       <div style={{display:'flex', gap:2, marginTop:10, height:80, borderRadius:8, overflow:'hidden', border:'1px solid var(--line)'}}>
         {regions.filter(r=>r.len>0).map((r,i)=>(
           <div key={i} title={`${r.len.toLocaleString()} bytes`} style={{
             flex:`${Math.max(r.len, total*0.02)} 0 0`,
             background:r.color, padding:'8px 10px',
             display:'flex', flexDirection:'column', justifyContent:'space-between',
-            minWidth:80, borderRight:'1px solid rgba(0,0,0,0.08)'
+            minWidth:60, borderRight:'1px solid rgba(0,0,0,0.08)'
           }}>
             <div style={{fontSize:11, fontWeight:700, color:'#1e293b'}}>{r.label}</div>
             <div style={{fontSize:10, fontFamily:'JetBrains Mono, monospace', color:'#475569'}}>
@@ -281,15 +292,23 @@ function AMPDUBytesViz({c}) {
           </div>
         ))}
       </div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8, marginTop:14}}>
+      <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:8, marginTop:14}}>
         <div className="hl-card"><div className="lab">APEP_LENGTH</div><div className="vv">{APEP.toLocaleString()}<span className="un">B</span></div></div>
+        <div className="hl-card"><div className="lab">NumMPDUs</div><div className="vv">{numMpdus}</div></div>
         <div className="hl-card"><div className="lab">PSDU bytes</div><div className="vv">{total.toLocaleString()}<span className="un">B</span></div></div>
-        <div className="hl-card"><div className="lab">EOF subframes</div><div className="vv">{eofCount}</div></div>
+        <div className="hl-card"><div className="lab">EOF delims</div><div className="vv">{eofCount}</div></div>
         <div className="hl-card"><div className="lab">PHY pad bits</div><div className="vv">{c.N_PAD_PHY_bits}</div></div>
       </div>
       <div className="detail" style={{marginTop:12}}>
-        Eq. 36-66: <code>N_PAD_MAC_bytes = ⌊N_PAD/8⌋</code>; sub-byte remainder becomes PHY padding before scrambling. EOF padding subframes are 4-byte
-        delimiters with EOF=1, MPDU length=0 → fixed pattern <code>01 00 9E 4E</code> repeated.
+        Eq. 36-66: <code>N_PAD_MAC_bytes = ⌊N_PAD/8⌋ = {c.N_PAD_MAC_bytes.toLocaleString()}</code>; sub-byte remainder becomes PHY padding before scrambling.
+        EOF-padding subframes are 4-byte delimiters with EOF=1, MPDU length=0 → fixed pattern <code>01 00 9E 4E</code> repeated.
+        {numMpdus > 1 && (
+          <span style={{display:'block', marginTop:6, color:'var(--ink-muted)', fontSize:11}}>
+            Each MPDU body chunk in real <code>build_ampdu</code> output is sized so (Delim + MAC + chunk + FCS) is 4-byte aligned — the
+            spec lets each subframe end with up to 3 padding bytes. For canonical APEP=5000 / NumMPDUs=2 the actual chunk is 2461 + 1-byte
+            align = 2496 B per subframe (verified vs. ref/wifi7-python).
+          </span>
+        )}
       </div>
     </div>
   );
