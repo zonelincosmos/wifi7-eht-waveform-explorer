@@ -244,7 +244,12 @@ function ConstellationExplorer({c}) {
 function AMPDUBytesViz({c}) {
   const APEP = c.APEP;
   const total = c.PSDU_bytes;
-  const bodyLen = APEP - 26 - 4;
+  // APEP_LENGTH covers the entire A-MPDU pre-EOF region:
+  //   APEP = Delim(4) + MAC_hdr(26) + Body + FCS(4)   ⇒ Body = APEP − 34
+  // PSDU then appends EOF-padding subframes:
+  //   PSDU = APEP + N_PAD_MAC_bytes
+  // For the canonical case APEP=5000 → Body=4966, EOF pad=1128 → PSDU=6128. ✓
+  const bodyLen = APEP - 4 - 26 - 4;
   const padBytes = total - APEP;
   const eofCount = Math.floor(padBytes / 4);
   // build region map

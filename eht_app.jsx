@@ -26,8 +26,8 @@ const SECTIONS = [
     desc:'L-SIG / U-SIG / EHT-SIG bit-field viewers · L-STF time waveform · EHT-LTF mode comparison' },
   { id:'sec-ofdm',      num:'VI',   title:'Time-Domain Synthesis',
     desc:'IFFT · CP / ISI demonstration · packet extension windowing · zero-pad vs polyphase resample' },
-  { id:'sec-features',  num:'VII',  title:'Multi-User & Multi-Link',
-    desc:'OFDMA RU / MRU layout · MLO multi-link operation' },
+  { id:'sec-features',  num:'VII',  title:'Multi-User OFDMA',
+    desc:'OFDMA RU / MRU layout — how SCs are split across users in EHT MU PPDUs' },
   { id:'sec-rate',      num:'VIII', title:'PHY Rate Calculator',
     desc:'Interactive Mbps / TXTIME calculator across (BW, MCS, GI, NSS, payload) combinations' },
   { id:'sec-trace',     num:'IX',   title:'Bit-Trace Tool',
@@ -177,7 +177,6 @@ function App() {
             </div>
           </div>
           <window.PipelineStepper c={c} />
-          <window.PPDUTimingViz />
         </Section>
 
         {/* II. Bytes, MAC & Scrambling — frame assembly + bit stream + scrambler + CRCs.
@@ -231,10 +230,9 @@ function App() {
           <window.PEWindowViz />
         </Section>
 
-        {/* VII. Multi-User & Multi-Link — features that modify the SU baseline. */}
+        {/* VII. Multi-User OFDMA — RU / MRU layouts that split SCs across users. */}
         <Section {...SECTIONS[6]}>
           <window.OFDMARUViz />
-          <window.MLOViz />
         </Section>
 
         <Section {...SECTIONS[7]}>

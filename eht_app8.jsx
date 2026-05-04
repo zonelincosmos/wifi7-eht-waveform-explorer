@@ -965,8 +965,9 @@ function GrayVsBinaryViz({ p }) {
             <g key={i} style={{cursor:'pointer'}} onClick={()=>setHighlight(i)}>
               <circle cx={px(pt.I)} cy={py(pt.Q)} r={isHl ? 9 : 6}
                 fill={isHl ? '#fff' : colorScale} stroke={colorScale} strokeWidth="2"/>
-              <text x={px(pt.I)} y={py(pt.Q)+3} fontSize="9" textAnchor="middle"
-                fontFamily="JetBrains Mono, monospace" fill={isHl ? colorScale : '#fff'} fontWeight={isHl?700:400}>
+              <text x={px(pt.I)} y={py(pt.Q)+4} fontSize="13" textAnchor="middle"
+                fontFamily="JetBrains Mono, monospace" fill={isHl ? colorScale : '#fff'} fontWeight={isHl?700:600}
+                style={{paintOrder:'stroke', stroke: isHl ? 'none' : 'rgba(0,0,0,0.35)', strokeWidth: isHl ? 0 : 0.5}}>
                 {(codeKind==='gray' ? pt.grayCode : pt.binCode).toString(2).padStart(4,'0')}
               </text>
             </g>
