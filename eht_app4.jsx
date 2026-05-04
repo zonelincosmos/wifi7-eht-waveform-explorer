@@ -247,16 +247,18 @@ function AMPDUBytesViz({c}) {
   const numMpdus = c.NumMPDUs || 1;
   const layout   = c.ampdu_layout;        // exact byte map from compute()
 
-  // build region map from the exact layout — one block per subframe segment
+  // build region map from the exact layout — one block per subframe segment.
+  // The block shows {label, len_in_bytes, hex_or_note}; len is rendered
+  // separately, so `hex` should describe content only (no byte count).
   const regions = [];
   layout.subframes.forEach((sf, i) => {
     const lab = numMpdus > 1 ? ` #${i+1}` : '';
-    regions.push({ len:4,         color:'#fbcfe8', label:'Delim'+lab,      hex:'4 B · CRC-8 · Sig 0x4E' });
-    regions.push({ len:26,        color:'#ddd6fe', label:'MAC Header'+lab, hex:'26 B · 88 01 …' });
-    regions.push({ len:sf.chunk,  color:'#bfdbfe', label:'Body'+lab,       hex:`${sf.chunk.toLocaleString()} B` });
+    regions.push({ len:4,         color:'#fbcfe8', label:'Delim'+lab,      hex:'CRC-8 · Sig 0x4E' });
+    regions.push({ len:26,        color:'#ddd6fe', label:'MAC Header'+lab, hex:'88 01 …' });
+    regions.push({ len:sf.chunk,  color:'#bfdbfe', label:'Body'+lab,       hex:'user data' });
     regions.push({ len:4,         color:'#bbf7d0', label:'FCS'+lab,        hex:'CRC-32' });
     if (sf.align > 0) {
-      regions.push({ len:sf.align, color:'#fef3c7', label:'align'+lab, hex:`${sf.align} B (0x00)` });
+      regions.push({ len:sf.align, color:'#fef3c7', label:'align'+lab, hex:'0x00 …' });
     }
   });
   if (layout.eof_count > 0) {
@@ -265,7 +267,7 @@ function AMPDUBytesViz({c}) {
   }
   if (layout.eof_tail > 0) {
     regions.push({ len: layout.eof_tail, color:'#fed7aa',
-                   label:'tail', hex:`${layout.eof_tail} B · 0xFF` });
+                   label:'tail', hex:'0xFF …' });
   }
   if (c.N_PAD_PHY_bits > 0) {
     regions.push({ len:0, color:'#fee2e2',
