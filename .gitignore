@@ -1,0 +1,32 @@
+# OS / editor artefacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# AI assistant working state — must never be public
+.claude/
+.claude.json
+CLAUDE.md
+*.plan.md
+
+# Reference Python implementation lives in its own repo; do not bundle here
+ref/
+
+# Python build artefacts (only relevant if user keeps the ref/ folder locally)
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node (if a future bundler is added)
+node_modules/
+dist/
+build/
+
+# Generated waveform artefacts
+*.npz
+eht_waveform_*.png
+parity_report.csv
