@@ -308,10 +308,17 @@
       TSYM_us, T_DATA_us, NFFT, CP_data, data_samps,
       fieldUs, TXTIME, total_samps, LSIG_LEN,
       phy_rate_Mbps, mac_throughput_Mbps,
-      // A-MPDU summary
+      // A-MPDU summary. Per IEEE 802.11-2024 §10.12.7 each real subframe is
+      //   delim(4) + MAC_hdr(26) + chunk + FCS(4) + align_pad(0..3)
+      // For NumMPDUs=1 the chunk fills APEP exactly: chunk = APEP − 34, no
+      // align pad needed. For NumMPDUs ≥ 2 align pads accumulate; the bound
+      // user_data ≤ APEP − N·(34+3) is exact only when each subframe ends up
+      // 3-byte aligned. The expression below approximates that worst-case
+      // bound; it is informational and not used for visualisations (those
+      // read APEP, NumMPDUs, N_PAD_MAC_bytes directly).
       perMPDU_overhead: 34,
       max_chunk: 4065,
-      user_data_total: APEP - (NumMPDUs * 34) - (NumMPDUs * 3) - 4
+      user_data_total_max: APEP - NumMPDUs * 34 - NumMPDUs * 3
     };
   }
 
@@ -424,8 +431,9 @@
   // Per-SC base pilot (Ψ, Eq. 27-104)
   const PSI_8 = [1,1,1,-1,-1,1,1,1];
 
-  // Pilot polarity offset map: which PPDU field uses which polarity index
-  // Per §14.14: L-SIG=0, RL-SIG=1, U-SIG-1=2, U-SIG-2=3, EHT-SIG-{1..N}=4..3+N, then Data starts
+  // Pilot polarity offset map: which PPDU field uses which polarity index.
+  // Per IEEE 802.11be-2024 Eq. 36-87 + §17.3.5.10:
+  //   L-SIG=0, RL-SIG=1, U-SIG-1=2, U-SIG-2=3, EHT-SIG-{1..N}=4..3+N, then Data starts.
   function pilotOffsetForData(N_EHT_SIG){ return 4 + N_EHT_SIG; }
 
   // CRC-8 used by A-MPDU delimiter (poly 0x07, init 0xFF, final XOR 0xFF, scope = first 16 bits).

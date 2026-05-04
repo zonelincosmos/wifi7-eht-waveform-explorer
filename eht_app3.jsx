@@ -22,7 +22,7 @@ function ByteBitsViz() {
   }
   return (
     <div className="panel">
-      <h2><span className="num">α</span>Byte → bit ordering <span className="desc">— §2.5 · 802.11 transmits bit 0 of byte 0 first (LSB-first inside each byte)</span></h2>
+      <h2><span className="num">α</span>Byte → bit ordering <span className="desc">— IEEE 802.11be-2024 §36.3.13.2 · scrambler input is fed bit 0 of byte 0 first (LSB-first within each byte)</span></h2>
       <div style={{display:'flex', gap:18, alignItems:'center', flexWrap:'wrap', marginBottom:14}}>
         <div>
           <label style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>byte (hex)</label>
@@ -79,7 +79,7 @@ function CoordViz() {
   ];
   return (
     <div className="panel">
-      <h2><span className="num">β</span>Subcarrier coordinates <span className="desc">— §2.4 · signed k vs MATLAB FFT bin: <code>bin = mod(k, NFFT) + 1</code></span></h2>
+      <h2><span className="num">β</span>Subcarrier coordinates <span className="desc">— signed spec index k ↔ FFT bin · <code>bin_0idx = ((k mod NFFT) + NFFT) mod NFFT</code> · 1-indexed: <code>bin = mod(k, NFFT) + 1</code></span></h2>
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:18}}>
         <div>
           <label style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>signed index k</label>
@@ -139,7 +139,7 @@ function LSigViz({c, p}) {
   const bits = [...rate, 0, ...length12, parity, 0,0,0,0,0,0];
   return (
     <div className="panel">
-      <h2><span className="num">γ</span>L-SIG bit strip <span className="desc">— §9.2/9.9 · 24-bit BCC R=1/2 BPSK · LENGTH derived so LENGTH mod 3 == 0 marks EHT</span></h2>
+      <h2><span className="num">γ</span>L-SIG bit strip <span className="desc">— IEEE 802.11be-2024 §36.3.12.5 · Eq. 36-18 · 24-bit BCC R=1/2 BPSK · LENGTH chosen so LENGTH mod 3 == 0 (EHT signature)</span></h2>
       <div style={{display:'flex', gap:4, marginTop:8, flexWrap:'nowrap', overflowX:'auto', paddingBottom:6}}>
         {bits.map((b,i)=>{
           let region, color;
@@ -220,7 +220,7 @@ const PALETTE_BLUE = [
 function USigViz() {
   return (
     <div className="panel">
-      <h2><span className="num">δ</span>U-SIG bit layout <span className="desc">— §10 · 26 + 26 = 52 bits, BCC R=1/2 BPSK across both 4 µs symbols</span></h2>
+      <h2><span className="num">δ</span>U-SIG bit layout <span className="desc">— IEEE 802.11be-2024 §36.3.12.7 · Table 36-28 · 26 + 26 = 52 bits, single BCC R=1/2 pass · BPSK across both 4 µs symbols</span></h2>
       <div style={{fontSize:13, color:'var(--accent)', fontWeight:600, marginTop:10, marginBottom:4}}>U-SIG-1 (26 bits)</div>
       <BitFieldStrip fields={E3.USIG1_BITS} palette={PALETTE_BLUE}/>
       <div style={{fontSize:13, color:'var(--accent)', fontWeight:600, marginTop:18, marginBottom:4}}>U-SIG-2 (26 bits = 16 data + 4 CRC + 6 tail)</div>

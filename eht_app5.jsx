@@ -73,7 +73,7 @@ function LSTFViz({p}) {
 
   return (
     <div className="panel">
-      <h2><span className="num">λ</span>L-STF construction <span className="desc">— §7 · 12 nonzero tones every 4th SC, replicated across {N20}× 20 MHz subblock{N20>1?'s':''}</span></h2>
+      <h2><span className="num">λ</span>L-STF construction <span className="desc">— IEEE 802.11be-2024 §36.3.12.3 · Eq. 36-15 · 12 nonzero S_(-26..26) tones every 4th SC, replicated across {N20}× 20 MHz subblock{N20>1?'s':''}</span></h2>
       <canvas ref={ref} width={1380} height={180} style={{width:'100%', height:180, background:'#fafcff', borderRadius:8, border:'1px solid var(--line)'}}/>
       <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8, marginTop:10}}>
         <div className="hl-card"><div className="lab">Sparse spacing</div><div className="vv">every 4 SC</div></div>
@@ -101,7 +101,7 @@ function EHTLTFViz() {
   const [sel, setSel] = useS5(2);
   return (
     <div className="panel">
-      <h2><span className="num">μ</span>EHT-LTF mode comparison <span className="desc">— §13 · 1×/2×/4× trade off SC mask density vs symbol duration</span></h2>
+      <h2><span className="num">μ</span>EHT-LTF mode comparison <span className="desc">— IEEE 802.11be-2024 §36.3.12.10 · Eq. 36-37..36-44 · 1×/2×/4× trade off SC-mask density vs symbol duration</span></h2>
       <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10, marginTop:10}}>
         {modes.map((m,i)=>{
           const active = sel===i;
@@ -214,7 +214,7 @@ function ScramblerSpectrumViz() {
   }, [scrambled]);
   return (
     <div className="panel">
-      <h2><span className="num">ν</span>Scrambler spectrum effect <span className="desc">— §15 · why we whiten before transmitting</span></h2>
+      <h2><span className="num">ν</span>Scrambler spectrum effect <span className="desc">— IEEE 802.11be-2024 §36.3.13.2 · Eq. 36-46 · why we whiten the bit stream before modulation</span></h2>
       <div style={{display:'flex', gap:8, marginBottom:10}}>
         {[[true,'Scrambled (white)'],[false,'Raw data (peaky)']].map(([k,t])=>(
           <button key={String(k)} onClick={()=>setScrambled(k)} style={{
@@ -302,7 +302,7 @@ function IFFTViz() {
 
   return (
     <div className="panel">
-      <h2><span className="num">ξ</span>IFFT = sum of cosines <span className="desc">— §18 · each SC contributes one phasor; black trace = sum (the time-domain symbol)</span></h2>
+      <h2><span className="num">ξ</span>IFFT = sum of cosines <span className="desc">— IEEE 802.11be-2024 §36.3.13 · each non-zero SC contributes one rotating phasor · the time-domain symbol is their sum</span></h2>
       <div style={{display:'flex', gap:18, alignItems:'center', flexWrap:'wrap', marginBottom:10}}>
         <label style={{display:'flex', alignItems:'center', gap:8}}>
           <span style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>active SCs</span>
@@ -413,7 +413,7 @@ function CPISIViz() {
   }, [delay, gi]);
   return (
     <div className="panel">
-      <h2><span className="num">π</span>Cyclic prefix &amp; ISI <span className="desc">— §18 · drag the multipath delay; the CP soaks up echoes shorter than GI</span></h2>
+      <h2><span className="num">π</span>Cyclic prefix &amp; ISI <span className="desc">— IEEE 802.11be-2024 §36.3.13 · Table 36-25 · drag the multipath delay — the CP absorbs echoes shorter than GI</span></h2>
       <div style={{display:'flex', gap:18, alignItems:'center', flexWrap:'wrap', marginBottom:10}}>
         <label style={{display:'flex', alignItems:'center', gap:8}}>
           <span style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>echo delay</span>

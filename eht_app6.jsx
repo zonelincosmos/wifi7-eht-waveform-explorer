@@ -19,7 +19,7 @@ const PIPELINE_STEPS = [
   { id:7,  group:'CODING',name:'Segment parser',               desc:'For BW > 80 MHz, split into 80-MHz segments before interleaving (legacy 11ax, identity in EHT).' },
   { id:8,  group:'MAP',   name:'Constellation mapping',        desc:'Bit groups → I/Q symbols (BPSK / QPSK / 16-/64-/256-/1024-/4096-QAM, Gray coded).' },
   { id:9,  group:'MAP',   name:'LDPC tone mapping',            desc:'Permutation D_TM applied across SCs to spread codeword bits in frequency (interleaving for LDPC).' },
-  { id:10, group:'MAP',   name:'Pilot insertion',              desc:'Insert pilot tones modulated by polarity sequence Ψ from §14.14; 8 pilots in EHT-MCS frames.' },
+  { id:10, group:'MAP',   name:'Pilot insertion',              desc:'Insert pilot tones modulated by Ψ × p_n (Ψ from §27.3.12.13, p_n 127-element from §17.3.5.10). Pilot count per BW: 8 / 16 / 16 / 32 / 64 (Table 36-58).' },
   { id:11, group:'MAP',   name:'CSD per stream',               desc:'Apply cyclic shift diversity (γ_iSS) per stream so multiple antennas don\'t form an unintended beam.' },
   { id:12, group:'MAP',   name:'Spatial mapping Q',            desc:'Multiply N_SS-vector by N_TX×N_SS matrix Q (precoding / beamforming steering).' },
   { id:13, group:'OFDM',  name:'IFFT per chain',               desc:'Each TX chain runs an N_FFT-point IFFT over its frequency-domain symbol.' },
@@ -155,7 +155,7 @@ function PHYRateCalc() {
 
   return (
     <div className="panel">
-      <h2><span className="num">τ</span>PHY rate calculator <span className="desc">— §App-D · compute peak Mbps from BW × MCS × N_SS × GI</span></h2>
+      <h2><span className="num">τ</span>PHY rate calculator <span className="desc">— IEEE 802.11be-2024 Table 36-79 · peak Mbps = N_SD · N_BPSCS · R · N_SS / T_SYM</span></h2>
       <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:14}}>
         <div>
           <div style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6}}>BW (MHz)</div>

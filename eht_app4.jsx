@@ -85,7 +85,7 @@ function PilotClockViz({c}) {
 
   return (
     <div className="panel">
-      <h2><span className="num">η</span>Pilot polarity clock <span className="desc">— §14.14 · 127-element p_n advances 1 per OFDM symbol; offset = 4 + N_EHT-SIG</span></h2>
+      <h2><span className="num">η</span>Pilot polarity clock <span className="desc">— IEEE 802.11-2020 §17.3.5.10 (127-element p_n) · IEEE 802.11be-2024 §36.3.13.11 (EHT pilot offset 4 + N_EHT-SIG)</span></h2>
       <div style={{display:'grid', gridTemplateColumns:'320px 1fr', gap:24, alignItems:'center'}}>
         <svg width="320" height="320" style={{display:'block'}}>
           <circle cx={cx} cy={cy} r={R} fill="#fff" stroke="var(--line)" strokeWidth="1.5"/>
@@ -206,7 +206,7 @@ function ConstellationExplorer({c}) {
   const sel = pick!==null?points[pick]:null;
   return (
     <div className="panel">
-      <h2><span className="num">θ</span>Constellation explorer <span className="desc">— §17 · {m.name}, Gray-coded I and Q axes · click any point to see its bit pattern</span></h2>
+      <h2><span className="num">θ</span>Constellation explorer <span className="desc">— IEEE 802.11be-2024 §36.3.13.5 · Table 36-51 · {m.name}, Gray-coded I and Q axes · click any point to see its bit pattern</span></h2>
       <div style={{display:'grid', gridTemplateColumns:'380px 1fr', gap:24}}>
         <canvas ref={ref} width={380} height={380} style={{cursor:'crosshair', border:'1px solid var(--line)', borderRadius:8}} onClick={handleClick}/>
         <div>
@@ -264,7 +264,7 @@ function AMPDUBytesViz({c}) {
   if (c.N_PAD_PHY_bits>0) regions.push({ len:0, color:'#fee2e2', label:`+ ${c.N_PAD_PHY_bits}b PHY pad`, hex:'sub-byte' });
   return (
     <div className="panel">
-      <h2><span className="num">ι</span>A-MPDU byte layout <span className="desc">— §19 · APEP = {APEP.toLocaleString()} bytes → PSDU = {total.toLocaleString()} bytes after EOF padding</span></h2>
+      <h2><span className="num">ι</span>A-MPDU byte layout <span className="desc">— IEEE 802.11-2024 §10.12.7 (A-MPDU pre-EOF padding) · APEP = {APEP.toLocaleString()} bytes → PSDU = {total.toLocaleString()} bytes after EOF-padding delimiters</span></h2>
       <div style={{display:'flex', gap:2, marginTop:10, height:80, borderRadius:8, overflow:'hidden', border:'1px solid var(--line)'}}>
         {regions.filter(r=>r.len>0).map((r,i)=>(
           <div key={i} title={`${r.len.toLocaleString()} bytes`} style={{
@@ -324,7 +324,7 @@ function CRCStepperViz() {
   }
   return (
     <div className="panel">
-      <h2><span className="num">κ</span>Interactive CRC <span className="desc">— §20 · type bytes, see the checksum compute live</span></h2>
+      <h2><span className="num">κ</span>Interactive CRC <span className="desc">— CRC-8 delim §10.12.7 · CRC-32 FCS §10.3.4 (IEEE 802.11-2024) · type bytes, see the checksum compute live</span></h2>
       <div style={{display:'flex', gap:8, marginBottom:12}}>
         {[['crc8','CRC-8 (A-MPDU delim)'],['crc32','CRC-32 (MPDU FCS)']].map(([k,t])=>(
           <button key={k} onClick={()=>setVariant(k)} style={{

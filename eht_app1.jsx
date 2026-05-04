@@ -249,7 +249,7 @@ function BitPipeline({c, p}) {
       t: 'Step 10 — Concatenate × N_SYM, append PE',
       v: `${c.data_samps.toLocaleString()} + PE samples`,
       body: <>
-        <p>Repeat for N_SYM = <code>{c.N_SYM}</code> OFDM symbols. Append Packet Extension (4 µs default, content implementation-defined). Final Data+PE field = <code>{(c.data_samps + 4*480).toLocaleString()}</code> samples.</p>
+        <p>Repeat for N_SYM = <code>{c.N_SYM}</code> OFDM symbols. Append Packet Extension (T_PE = <code>{c.fieldUs['PE']} µs</code>, depends on a_init &amp; NominalPacketPadding per IEEE 802.11be-2024 Table 36-61). Final Data+PE field = <code>{(c.data_samps + Math.round(c.fieldUs['PE'] * window.EHT.FS_OS_MHZ)).toLocaleString()}</code> samples.</p>
       </>
     }
   ];

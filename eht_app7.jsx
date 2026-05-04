@@ -32,7 +32,7 @@ function PuncturingViz({p}) {
   };
   return (
     <div className="panel">
-      <h2><span className="num">α₂</span>Channel puncturing pattern <span className="desc">— §16 · click any 20-MHz subblock to mask it (primary can't be punctured)</span></h2>
+      <h2><span className="num">α₂</span>Channel puncturing pattern <span className="desc">— IEEE 802.11be-2024 §36.3.6 · click any 20-MHz subblock to mask it (primary 20 MHz cannot be punctured)</span></h2>
       {N20 < 4 ? (
         <div style={{padding:14, background:'#fff8e6', borderRadius:8, color:'var(--orange)', fontSize:13}}>
           Set BW ≥ 80 MHz to demonstrate puncturing (need ≥ 4 subblocks).
