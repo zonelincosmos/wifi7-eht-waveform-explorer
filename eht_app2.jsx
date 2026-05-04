@@ -2,13 +2,18 @@
 const { useState: useState2, useEffect: useEffect2, useRef: useRef2, useMemo: useMemo2 } = React;
 
 // ------------- A-MPDU / MPDU structure -------------
+// APEP_LENGTH covers the entire pre-EOF region of the PSDU. For NumMPDUs=1
+// (S-MPDU, default) one real subframe fills it:
+//   APEP = Delim(4) + MAC_hdr(26) + Body + FCS(4)   ⇒  Body = APEP − 34
+// PSDU then appends EOF-padding delimiters (Length=0 / EOF=1, 4 B each):
+//   PSDU = APEP + N_PAD_MAC_bytes
+// Canonical (APEP=5000) → Body=4966, EOF count = 1128/4 = 282, PSDU=6128. ✓
 function MPDUView({c}) {
-  const subBytes = 4 + 26 + 4; // delim + hdr + fcs (no body)
-  const realMPDUMax = c.PSDU_bytes - 4 - 4; // crude
-  const eofCount = Math.max(0, Math.floor((c.PSDU_bytes - (4 + 26 + (c.APEP - 26 - 4) + 4)) / 4));
+  const bodyLen   = c.APEP - 4 - 26 - 4;        // = APEP − 34
+  const eofCount  = Math.max(0, Math.floor(c.N_PAD_MAC_bytes / 4));
   return (
     <div className="panel">
-      <h2><span className="num">6</span>A-MPDU / MPDU Structure <span className="desc">— PSDU = real MPDU subframe + EOF padding subframes</span></h2>
+      <h2><span className="num">6</span>A-MPDU / MPDU Structure <span className="desc">— PSDU = real MPDU subframe(s) + EOF-padding delimiters · Sec. 10.12.7</span></h2>
       <div style={{marginTop:6, marginBottom:14}}>
         <div className="bigbar">
           <div className="bigbar-seg" style={{flex:'4 0 0', background:'#db5a8a', minWidth:60}}>
@@ -17,19 +22,24 @@ function MPDUView({c}) {
           <div className="bigbar-seg" style={{flex:'26 0 0', background:'#7c5ce0', minWidth:90}}>
             <div className="nm">MAC Header</div><div className="du">26 B</div>
           </div>
-          <div className="bigbar-seg" style={{flex:`${c.APEP-26-4} 1 0`, background:'#3b82f6', minWidth:120}}>
-            <div className="nm">Frame Body (user data)</div><div className="du">{(c.APEP-26-4).toLocaleString()} B</div>
+          <div className="bigbar-seg" style={{flex:`${bodyLen} 1 0`, background:'#3b82f6', minWidth:120}}>
+            <div className="nm">Frame Body (user data)</div><div className="du">{bodyLen.toLocaleString()} B</div>
           </div>
           <div className="bigbar-seg" style={{flex:'4 0 0', background:'#22c55e', minWidth:60}}>
             <div className="nm">FCS</div><div className="du">4 B</div>
           </div>
         </div>
         <div className="bigbar-legend">
-          <span><span className="sw" style={{background:'#db5a8a'}}></span>Delimiter — <code>35 EA 6E 4E</code> (length=14989, EOF=1, CRC-8=0x6E, sig=0x4E)</span>
-          <span><span className="sw" style={{background:'#22c55e'}}></span>FCS — CRC-32 over header+body</span>
+          <span><span className="sw" style={{background:'#db5a8a'}}></span>Real-subframe Delim — Length = MAC+body+FCS, EOF = 0, CRC-8, Sig <code>0x4E</code></span>
+          <span><span className="sw" style={{background:'#22c55e'}}></span>FCS — CRC-32 over MAC header + body</span>
+        </div>
+        <div style={{fontSize:11, color:'var(--ink-muted)', marginTop:8, fontFamily:'JetBrains Mono, monospace'}}>
+          Body = APEP − Delim(4) − MAC(26) − FCS(4) = {c.APEP.toLocaleString()} − 34 = {bodyLen.toLocaleString()} B
         </div>
       </div>
-      <h3 style={{fontSize:13, color:'var(--ink-dim)', margin:'14px 0 6px'}}>… followed by {c.N_PAD_MAC_bytes>=4 ? Math.floor(c.N_PAD_MAC_bytes/4) : 0} EOF-padding subframes (4 B each = <code>01 00 9E 4E</code>)</h3>
+      <h3 style={{fontSize:13, color:'var(--ink-dim)', margin:'14px 0 6px'}}>
+        … followed by {eofCount} EOF-padding delimiters (4 B each = <code>01 00 9E 4E</code>) · {(eofCount*4).toLocaleString()} B → PSDU total {c.PSDU_bytes.toLocaleString()} B
+      </h3>
       <h3 style={{fontSize:13, color:'var(--accent)', margin:'18px 0 8px', fontWeight:600}}>A-MPDU Delimiter — 32 bits</h3>
       <div className="bits">
         {DELIM_BITS.map((b,i)=>(
