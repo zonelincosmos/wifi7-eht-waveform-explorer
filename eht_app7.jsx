@@ -460,7 +460,7 @@ function PEWindowViz() {
   const symbolBody = 60;
   return (
     <div className="panel">
-      <h2><span className="num">ζ₂</span>Packet Extension &amp; T_TR window <span className="desc">— §18 · last symbol → soft fall-off so spectral leakage is bounded</span></h2>
+      <h2><span className="num">ζ₂</span>Packet Extension &amp; T_TR window <span className="desc">— IEEE 802.11be-2024 §36.3.13 · Table 36-61 (T_PE) · last symbol decays through T_TR so spectral leakage is bounded</span></h2>
       <div style={{display:'flex', gap:8, alignItems:'center', marginBottom:14}}>
         <span style={{fontSize:11, color:'var(--ink-muted)', textTransform:'uppercase', letterSpacing:'0.06em'}}>PE size</span>
         {[0, 8, 16, 20].map(v=>(
