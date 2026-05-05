@@ -546,8 +546,10 @@ function ConveyorBelt({cur, step, playing, reveal}) {
   if (!cur) return null;
 
   // Compact dimensions — fit in a typical desktop panel without horizontal scroll.
+  // padR enlarged from 168 → 240 so the right-side "out = X / (scrambled)"
+  // label fits inside the viewBox (was being clipped by the SVG's right edge).
   const cellW = 44, cellH = 42, gap = 4;
-  const padL = 88, padR = 168, padT = 96, padB = 78;
+  const padL = 88, padR = 240, padT = 96, padB = 78;
   const xs = [];
   for (let i = 0; i < 11; i++) xs.push(padL + i * (cellW + gap));
   const yReg = padT;
