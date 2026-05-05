@@ -180,6 +180,9 @@ function ScramblerTutorial() {
     }}>
       <ScrTitle/>
 
+      {/* "What this whole panel does" — plain-language story before the LFSR diagram */}
+      <PlainLanguageIntro/>
+
       {/* Mini-panel reveal selector */}
       <RevealStrip reveal={reveal} setReveal={setReveal}/>
 
@@ -217,6 +220,66 @@ function ScramblerTutorial() {
 
       {/* SERVICE-field comparison */}
       <ServiceCard seed={seed} records={records}/>
+    </div>
+  );
+}
+
+// ---------- "What is this whole thing" plain-language intro ----------
+// Goal: before showing the wire-spaghetti SVG, explain in human language
+// what scrambling actually does, what the 3 streams are, and why anyone cares.
+function PlainLanguageIntro() {
+  return (
+    <div style={{
+      background: '#FFFDF5', border: `1px solid ${SC.amberSoft}`,
+      borderRadius: 12, padding: '14px 18px', marginBottom: 18,
+      boxShadow: '0 1px 2px rgba(184,95,18,0.04)',
+    }}>
+      <div style={{fontSize:11, fontWeight:700, color:SC.amberDeep, textTransform:'uppercase',
+                    letterSpacing:'0.1em', marginBottom:8}}>
+        What this panel actually does
+      </div>
+      <div style={{fontSize:13, color:SC.inkDim, lineHeight:1.7, marginBottom:10}}>
+        A WiFi transmitter takes your raw data bits (PSDU + SERVICE) and XORs them
+        bit-by-bit with a pseudo-random sequence before sending. This is called
+        <b style={{color:SC.amberDeep}}> scrambling</b>. The point is to <b>whiten the
+        spectrum</b> so a long run of identical data bits doesn't accidentally produce a tone.
+        The receiver runs the SAME XOR with the SAME sequence to recover the data — XOR is its
+        own inverse.
+      </div>
+
+      {/* Three-stream story: in / PN / out */}
+      <div style={{display:'grid', gridTemplateColumns:'auto 1fr', gap:'8px 14px',
+                    fontSize:12.5, fontFamily:'JetBrains Mono, monospace', alignItems:'center', marginTop:6}}>
+        <span style={{color:SC.sageDeep, fontWeight:700, padding:'2px 8px',
+                      background: SC.sageSoft, borderRadius:5}}>
+          in
+        </span>
+        <span><b>Data input</b> — your raw bits going INTO the scrambler (e.g. SERVICE
+          all-zeros, then your PSDU bytes). One bit per clock.</span>
+
+        <span style={{color:SC.roseDeep, fontWeight:700, padding:'2px 8px',
+                      background: 'rgba(244, 114, 182, 0.12)', borderRadius:5}}>
+          PN
+        </span>
+        <span><b>Pseudo-random Number bit</b> — what the 11-bit shift-register
+          (LFSR) emits this clock. Looks random, but completely deterministic given the seed.
+          <i> This is the only thing the LFSR diagram below actually computes.</i></span>
+
+        <span style={{color:SC.plumDeep, fontWeight:700, padding:'2px 8px',
+                      background: 'rgba(168, 85, 247, 0.12)', borderRadius:5}}>
+          out
+        </span>
+        <span><b>Scrambled output</b> = <code>in ⊕ PN</code>. This is what
+          actually goes on the air (after FEC, IFFT, etc.).</span>
+      </div>
+
+      <div style={{fontSize:12, color:SC.inkMuted, marginTop:10, lineHeight:1.6}}>
+        <b style={{color:SC.amberDeep}}>How to read the diagram below:</b> the 11 boxes (X₁…X₁₁) are
+        register cells. Every clock the bits inside SHIFT one cell to the right. The
+        rightmost cell (X₁₁) drops its bit out the bottom — that's the PN bit for this clock.
+        Two of the cells (X₁₁ and X₉) feed back UP into a XOR; the result drops into the leftmost
+        cell to refill the register. Then the data XOR happens at the bottom-right: <code>in ⊕ PN</code>.
+      </div>
     </div>
   );
 }
@@ -512,8 +575,17 @@ function ConveyorBelt({cur, step, playing, reveal}) {
       boxShadow:'0 1px 2px rgba(184,95,18,0.04), 0 6px 18px rgba(184,95,18,0.05)',
       overflowX:'auto'
     }}>
-      <div style={{fontSize:13, color:SC.amberDeep, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:700, marginBottom:8}}>
-        The Conveyor Belt &nbsp;<span style={{color:SC.inkMuted, fontWeight:400, textTransform:'none', letterSpacing:0, fontSize:13}}>· feedback drops in at left, output bit falls out at right</span>
+      <div style={{fontSize:13, color:SC.amberDeep, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:700, marginBottom:4}}>
+        The 11-cell shift register &amp; the data XOR
+      </div>
+      <div style={{fontSize:12, color:SC.inkMuted, marginBottom:10, lineHeight:1.55}}>
+        Three colour-coded zones:
+        {' '}<b style={{color:SC.roseDeep}}>red</b> = LFSR feedback path (taps from X₁₁ &amp; X₉ →
+        XOR → back into X₁₁ to refill the register).
+        {' '}<b style={{color:SC.amberDeep}}>amber</b> = the 11 register cells (showing their
+        current bit values).
+        {' '}<b style={{color:SC.plumDeep}}>purple</b> = the data XOR — where the PN bit (out of
+        cell X₁₁) meets your incoming data bit, producing the scrambled output.
       </div>
 
       <svg width={W} height={H} style={{display:'block', margin:'0 auto', minWidth:W}}>
@@ -800,13 +872,21 @@ function PianoRoll({records, step, setStep}) {
       background:'#fff', borderRadius:12, padding:'14px 18px', marginBottom:14,
       border: `1px solid ${SC.line}`,
     }}>
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8}}>
+      <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:4}}>
         <div style={{fontSize:11, color:SC.amberDeep, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:600}}>
-          Bit-stream piano roll
+          Bit-stream piano roll · 3 streams over time
         </div>
         <div style={{fontSize:11, color:SC.inkMuted, fontFamily:'JetBrains Mono, monospace'}}>
           click any column to jump
         </div>
+      </div>
+      <div style={{fontSize:11, color:SC.inkMuted, marginBottom:8, lineHeight:1.55}}>
+        Each column = one clock tick.
+        {' '}<b style={{color:SC.sageDeep}}>Data in</b> (raw input, e.g. SERVICE all-zeros, then PSDU bytes)
+        ⊕
+        {' '}<b style={{color:SC.roseDeep}}>PN bit</b> (X₁₁ output of the LFSR this clock)
+        =
+        {' '}<b style={{color:SC.plumDeep}}>Scrambled</b> (what goes on the air).
       </div>
 
       <div ref={containerRef} style={{overflowX:'auto', position:'relative', paddingBottom:6}}>
@@ -814,10 +894,10 @@ function PianoRoll({records, step, setStep}) {
           display:'inline-block', minWidth:'100%', position:'relative',
           fontFamily:'JetBrains Mono, monospace'
         }}>
-          {/* Cursor */}
+          {/* Cursor — offset = label width(74) + label margin(6) = 80 */}
           <div style={{
             position:'absolute',
-            left: 50 + step*(cellW+2),
+            left: 80 + step*(cellW+2),
             top: 4, bottom: 4,
             width: cellW,
             background: SC.amberSoft,
@@ -827,16 +907,16 @@ function PianoRoll({records, step, setStep}) {
             zIndex: 1,
           }}/>
 
-          <RollRow label="in"  color={SC.sageDeep}  bits={inBits}  step={step} cellW={cellW} setStep={setStep}/>
-          <div style={{position:'relative', height:18, marginLeft:50}}>
+          <RollRow label="Data in"     color={SC.sageDeep}  bits={inBits}  step={step} cellW={cellW} setStep={setStep}/>
+          <div style={{position:'relative', height:18, marginLeft:80}}>
             <div style={{
               position:'absolute', left: step*(cellW+2) + cellW/2 - 8, top:1,
               fontSize: 14, color: SC.rose, fontWeight: 700, transition: `left ${ANIM.step}ms ${ANIM.ease}`
             }}>⊕</div>
           </div>
-          <RollRow label="PN"  color={SC.roseDeep}  bits={pnBits}  step={step} cellW={cellW} setStep={setStep}/>
-          <div style={{position:'relative', height:14, marginLeft:50, borderTop:`1px dashed ${SC.line}`}}/>
-          <RollRow label="out" color={SC.plumDeep}  bits={outBits} step={step} cellW={cellW} setStep={setStep}/>
+          <RollRow label="PN bit"      color={SC.roseDeep}  bits={pnBits}  step={step} cellW={cellW} setStep={setStep}/>
+          <div style={{position:'relative', height:14, marginLeft:80, borderTop:`1px dashed ${SC.line}`}}/>
+          <RollRow label="Scrambled"   color={SC.plumDeep}  bits={outBits} step={step} cellW={cellW} setStep={setStep}/>
         </div>
       </div>
 
@@ -853,7 +933,7 @@ function RollRow({label, color, bits, step, cellW, setStep}) {
   return (
     <div style={{display:'flex', alignItems:'center', marginBottom:3, position:'relative'}}>
       <div style={{
-        width: 44, fontSize:11, color, fontWeight:700, textAlign:'right',
+        width: 74, fontSize:11, color, fontWeight:700, textAlign:'right',
         marginRight:6, fontFamily:'JetBrains Mono, monospace'
       }}>{label}</div>
       <div style={{display:'flex', gap:2}}>
