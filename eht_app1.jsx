@@ -35,7 +35,22 @@ function Controls({p, set}) {
         </div>
         <div className="ctrl">
           <label>Guard Interval (µs)</label>
-          <select value={p.GI} onChange={e=>update('GI', +e.target.value)}>
+          <select value={p.GI} onChange={e=>{
+            const newGI = +e.target.value;
+            // Per IEEE 802.11be-2024 Table 36-36, valid (LTFType, GI) pairs are
+            // (2,0.8), (2,1.6), (4,0.8), (4,3.2). If the new GI invalidates the
+            // current LTFType choice, auto-correct to the only legal option.
+            const validForCurrentLTF = (p.LTFType === 2 && (newGI === 0.8 || newGI === 1.6))
+                                    || (p.LTFType === 4 && (newGI === 0.8 || newGI === 3.2));
+            if (validForCurrentLTF) {
+              update('GI', newGI);
+            } else {
+              // GI=1.6 only pairs with LTF=2; GI=3.2 only pairs with LTF=4
+              const newLTF = (newGI === 1.6) ? 2 : 4;
+              update('GI', newGI);
+              update('LTFType', newLTF);
+            }
+          }}>
             <option value={0.8}>0.8</option>
             <option value={1.6}>1.6</option>
             <option value={3.2}>3.2</option>
@@ -43,9 +58,22 @@ function Controls({p, set}) {
         </div>
         <div className="ctrl">
           <label>EHT-LTF Type</label>
-          <select value={p.LTFType} onChange={e=>update('LTFType', +e.target.value)}>
-            <option value={2}>2× (6.4 µs DFT)</option>
-            <option value={4}>4× (12.8 µs DFT)</option>
+          <select value={p.LTFType} onChange={e=>{
+            const newLTF = +e.target.value;
+            const validForCurrentGI = (newLTF === 2 && (p.GI === 0.8 || p.GI === 1.6))
+                                   || (newLTF === 4 && (p.GI === 0.8 || p.GI === 3.2));
+            if (validForCurrentGI) {
+              update('LTFType', newLTF);
+            } else {
+              // Auto-correct GI: LTF=2 forces GI ∈ {0.8, 1.6} → pick 0.8
+              //                  LTF=4 forces GI ∈ {0.8, 3.2} → pick 3.2 (canonical)
+              const newGI = (newLTF === 2) ? 0.8 : 3.2;
+              update('LTFType', newLTF);
+              update('GI', newGI);
+            }
+          }}>
+            <option value={2}>2× (6.4 µs DFT) — pairs with GI 0.8 or 1.6</option>
+            <option value={4}>4× (12.8 µs DFT) — pairs with GI 0.8 or 3.2</option>
           </select>
         </div>
         <div className="ctrl">

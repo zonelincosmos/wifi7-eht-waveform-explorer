@@ -187,6 +187,19 @@
   // Compute pipeline numbers for given parameters.
   // Backward-compatible signature: p = {BW, MCS, APEP, GI, LTFType, NumMPDUs, ScramblerInit?, Coding?}.
   function compute(p) {
+    // Validate (LTFType, GI) per IEEE 802.11be-2024 Table 36-36.  Only
+    // (2, 0.8) (2, 1.6) (4, 0.8) (4, 3.2) are legal.  We compute anyway so
+    // the page doesn't crash mid-render, but warn the caller — invalid
+    // combos produce nonsensical TXTIME and L-SIG LENGTH that don't match
+    // any spec-compliant frame.
+    const _ltfGiValid = (p.LTFType === 2 && (p.GI === 0.8 || p.GI === 1.6))
+                     || (p.LTFType === 4 && (p.GI === 0.8 || p.GI === 3.2));
+    if (!_ltfGiValid && !window._ehtLtfGiWarned) {
+      console.warn(`[eht_compute] (LTFType=${p.LTFType}, GI=${p.GI}) violates Table 36-36. ` +
+                   `Valid pairs: (2,0.8) (2,1.6) (4,0.8) (4,3.2). TXTIME will be computed ` +
+                   `but does not represent any spec-compliant PPDU.`);
+      window._ehtLtfGiWarned = true;  // suppress console spam
+    }
     const cfg = BW_CFG[p.BW];
     const m = MCS[p.MCS];
     const N_SD = cfg.N_SD;
