@@ -1205,86 +1205,237 @@ window.ZeroPadVsResampleViz = ZeroPadVsResampleViz;
 //     11-bit integer to recover the seed verbatim.
 // =====================================================================
 
-function ScramblerSeedRecoveryViz({ p }) {
-  const [seed, setSeed] = useState8(p.ScramblerInit || 93);
-  const seedClamped = Math.max(1, Math.min(2047, seed | 0));
-
-  // Run the spec LFSR forward for 16 steps (input = 16 zeros = SERVICE).
-  // Output = reg[10] = X11; feedback = reg[8] ^ reg[10]; shift right with fb at reg[0].
+// Helper: simulate the spec LFSR forward for `n` steps starting from seed.
+// Returns Uint8Array of n PN-output bits.
+function _ssrLfsr(seed, n) {
   const reg = new Uint8Array(11);
-  for (let i = 0; i < 11; i++) reg[i] = (seedClamped >> (10 - i)) & 1;
-  const pn = [];
-  for (let n = 0; n < 16; n++) {
-    pn.push(reg[10]);
+  for (let i = 0; i < 11; i++) reg[i] = (seed >> (10 - i)) & 1;
+  const pn = new Uint8Array(n);
+  for (let k = 0; k < n; k++) {
+    pn[k] = reg[10];
     const fb = reg[8] ^ reg[10];
     for (let i = 10; i > 0; i--) reg[i] = reg[i - 1];
     reg[0] = fb;
   }
-  // The first 11 PN bits, interpreted LSB-first, must equal the seed.
-  let recovered = 0;
-  for (let k = 0; k < 11; k++) recovered |= pn[k] << k;
-  const ok = recovered === seedClamped;
+  return pn;
+}
+
+function ScramblerSeedRecoveryViz({ p }) {
+  // Two modes: "forward" (Tx seed → first 16 PN bits) and "reverse"
+  // (paste 16 captured SERVICE bits → derive seed). The reverse flow is
+  // exactly what a VSA / sniffer does to recover the unknown Tx seed.
+  const [mode, setMode] = useState8('forward');
+  const [seed, setSeed] = useState8(p.ScramblerInit || 93);
+  const [captured, setCaptured] = useState8('01110100 11110100');
+
+  const seedClamped = Math.max(1, Math.min(2047, seed | 0));
+
+  // ===== Forward mode: seed → 16 PN bits → recovered seed =====
+  const pnFromSeed = _ssrLfsr(seedClamped, 16);
+  let recoveredFromSeed = 0;
+  for (let k = 0; k < 11; k++) recoveredFromSeed |= pnFromSeed[k] << k;
+  const fwOk = recoveredFromSeed === seedClamped;
+
+  // ===== Reverse mode: parse user-pasted bits =====
+  const capturedBits = (() => {
+    const cleaned = captured.replace(/[^01]/g, '');
+    const arr = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) arr[i] = cleaned.charCodeAt(i) === 49 ? 1 : 0;  // '1' = 49
+    return { arr, cleaned, valid: cleaned.length >= 16 };
+  })();
+  // Step 1: take PN[0..10]
+  const first11 = Array.from(capturedBits.arr.slice(0, 11));
+  // Step 2: read LSB-first → seed
+  let derivedSeed = 0;
+  for (let k = 0; k < 11; k++) derivedSeed |= first11[k] << k;
+  // Step 3: regenerate full 16 PN bits from the derived seed and compare to captured
+  const regenPN = _ssrLfsr(derivedSeed || 1, 16);  // avoid all-zero seed (degenerate LFSR state)
+  const regenMatch = capturedBits.valid && Array.from(regenPN).every((b, i) => b === capturedBits.arr[i]);
+  const derivedSeedValid = derivedSeed >= 1 && derivedSeed <= 2047;
+
+  // Bit-box helper
+  const Bit = ({b, hi, dim, mismatch}) => (
+    <span style={{
+      display:'inline-block', minWidth:20, padding:'3px 5px', margin:'0 2px',
+      textAlign:'center', borderRadius:4, fontFamily:'JetBrains Mono, monospace',
+      background: mismatch ? '#fee2e2' : (hi ? '#dfe9ff' : (dim ? 'var(--bg2)' : '#fff')),
+      color:      mismatch ? 'var(--red)' : (hi ? 'var(--accent)' : 'var(--ink-dim)'),
+      border:'1px solid ' + (mismatch ? 'var(--red)' : (hi ? 'var(--accent)' : 'var(--line)')),
+      fontWeight: hi ? 700 : 400, fontSize:13
+    }}>{b}</span>
+  );
+
+  // Group 16 bits as 8+8 with a visible gap, like a VSA dump
+  const renderBits16 = (bits, highlightFirst11, mismatchMask) => (
+    <span>
+      {Array.from(bits).slice(0, 8).map((b, i) => (
+        <Bit key={i} b={b} hi={highlightFirst11 && i < 11} mismatch={mismatchMask && mismatchMask[i]} />
+      ))}
+      <span style={{display:'inline-block', width:10}}/>
+      {Array.from(bits).slice(8, 16).map((b, i) => (
+        <Bit key={i+8} b={b} hi={highlightFirst11 && i+8 < 11} mismatch={mismatchMask && mismatchMask[i+8]} />
+      ))}
+    </span>
+  );
 
   return (
     <div className="panel">
       <h2><span className="num">⏎</span> SERVICE field & seed recovery
         <span className="desc">
-          §36.3.13.2 · Table 36-1 · how the receiver finds the scrambler init seed without it ever being transmitted explicitly
+          §36.3.13.2 · Table 36-1 · how the receiver (or your VSA / sniffer) finds the scrambler init seed without it ever being transmitted explicitly
         </span>
       </h2>
 
-      <div style={{display:'flex', gap:14, alignItems:'center', flexWrap:'wrap', marginBottom:14, fontSize:13, fontFamily:'JetBrains Mono, monospace'}}>
-        <label>Tx seed (1..2047):
-          <input type="number" min="1" max="2047" value={seedClamped}
-            onChange={e => setSeed(Math.max(1, Math.min(2047, +e.target.value || 1)))}
-            style={{width:90, marginLeft:8, padding:'4px 8px', border:'1px solid var(--line)', borderRadius:4}}/>
-        </label>
-        <span style={{color:'var(--ink-dim)'}}>
-          binary: <code style={{color:'var(--accent)'}}>{seedClamped.toString(2).padStart(11, '0')}</code>
-          {' '}· hex: <code style={{color:'var(--accent)'}}>0x{seedClamped.toString(16).padStart(3, '0').toUpperCase()}</code>
-        </span>
+      {/* Mode tabs */}
+      <div style={{display:'flex', gap:8, marginBottom:14}}>
+        {[
+          ['forward', 'Forward · seed → bits',     'Pick a Tx seed, see what bits go on the air'],
+          ['reverse', 'Reverse · bits → seed',     'Paste 16 bits captured from a VSA / sniffer, derive the unknown seed'],
+        ].map(([k, label, tip]) => (
+          <button key={k} onClick={() => setMode(k)} title={tip} style={{
+            padding:'8px 14px', fontSize:12, borderRadius:6, fontWeight:600, cursor:'pointer',
+            background: mode===k ? 'var(--accent)' : '#fff',
+            color:      mode===k ? '#fff' : 'var(--ink-dim)',
+            border: `1px solid ${mode===k ? 'var(--accent)' : 'var(--line)'}`
+          }}>{label}</button>
+        ))}
       </div>
 
-      <div style={{background:'var(--bg2)', border:'1px solid var(--line)', borderRadius:6, padding:'12px 14px', marginBottom:14, fontSize:12, lineHeight:1.6, color:'var(--ink-dim)'}}>
-        <b style={{color:'var(--ink)'}}>Tx side</b>: SERVICE = 16 zero bits is concatenated before the PSDU,
-        then the whole bit stream is XORed with the 11-bit PN sequence
-        S(x) = x¹¹ + x⁹ + 1 driven by the seed. Since 0 ⊕ x = x, the
-        scrambled SERVICE bits are identically the first 16 PN bits.
-        {' '}<b style={{color:'var(--ink)'}}>Rx side</b>: after FFT + LDPC decode, the receiver knows the
-        SERVICE bits should have been zero, so it simply reads the first
-        16 descrambler-input bits as the PN sequence — no separate seed
-        signalling is needed.
+      {/* Common explainer */}
+      <div style={{background:'var(--bg2)', border:'1px solid var(--line)', borderRadius:6, padding:'12px 14px', marginBottom:14, fontSize:12, lineHeight:1.7, color:'var(--ink-dim)'}}>
+        <b style={{color:'var(--ink)'}}>Tx side:</b> SERVICE = 16 zero bits is prepended to the PSDU,
+        then the whole bit stream is XORed with the 11-bit PN sequence S(x) = x¹¹ + x⁹ + 1 driven
+        by the seed. Since 0 ⊕ x = x, <b>the scrambled SERVICE bits ARE the first 16 PN bits</b>.
+        {' '}<b style={{color:'var(--ink)'}}>Rx / VSA side:</b> the receiver knows SERVICE was sent
+        as zeros, so the 16 captured bits ARE the first 16 PN outputs.  The first 11, read LSB-first,
+        equal the seed itself — by spec design (Table 36-1: <code>SCRAMBLER_INITIAL_VALUE</code> ↔ first 11 scrambling bits, LSB-first).
       </div>
 
-      <div style={{display:'grid', gridTemplateColumns:'auto 1fr', gap:'10px 14px', fontFamily:'JetBrains Mono, monospace', fontSize:12, marginBottom:14}}>
-        <div style={{color:'var(--ink-muted)'}}>scrambled SERVICE = first 16 PN bits</div>
-        <div>
-          {pn.map((b, i) => (
-            <span key={i} style={{
-              display:'inline-block', minWidth:18, padding:'2px 4px', margin:'0 2px',
-              textAlign:'center', borderRadius:3,
-              background: i < 11 ? '#dfe9ff' : 'var(--bg2)',
-              color: i < 11 ? 'var(--accent)' : 'var(--ink-dim)',
-              border:'1px solid ' + (i < 11 ? 'var(--accent)' : 'var(--line)'),
-              fontWeight: i < 11 ? 700 : 400
-            }}>{b}</span>
-          ))}
-        </div>
-        <div style={{color:'var(--ink-muted)'}}>read PN[0..10] LSB-first → seed</div>
-        <div>
-          PN[0..10] = [{pn.slice(0, 11).join(', ')}]
-          {' '}→ <code style={{color:'var(--accent)', fontWeight:700}}>{recovered}</code>
-          {' '}({ok ? <span style={{color:'var(--green)'}}>✓ matches Tx seed</span>
-                    : <span style={{color:'var(--red)'}}>✗ MISMATCH (port bug)</span>})
-        </div>
-        <div style={{color:'var(--ink-muted)'}}>descrambling</div>
-        <div>
-          identical to scrambling (XOR with the same PN regenerated from the
-          recovered seed). Self-inverse, no separate Rx hardware.
-        </div>
-      </div>
+      {mode === 'forward' && (
+        <>
+          <div style={{display:'flex', gap:14, alignItems:'center', flexWrap:'wrap', marginBottom:14, fontSize:13, fontFamily:'JetBrains Mono, monospace'}}>
+            <label>Tx seed (1..2047):
+              <input type="number" min="1" max="2047" value={seedClamped}
+                onChange={e => setSeed(Math.max(1, Math.min(2047, +e.target.value || 1)))}
+                style={{width:90, marginLeft:8, padding:'4px 8px', border:'1px solid var(--line)', borderRadius:4}}/>
+            </label>
+            <span style={{color:'var(--ink-dim)'}}>
+              binary: <code style={{color:'var(--accent)'}}>{seedClamped.toString(2).padStart(11, '0')}</code>
+              {' '}· hex: <code style={{color:'var(--accent)'}}>0x{seedClamped.toString(16).padStart(3, '0').toUpperCase()}</code>
+            </span>
+          </div>
 
-      <div style={{fontSize:11, color:'var(--ink-muted)', lineHeight:1.55}}>
+          <div style={{display:'grid', gridTemplateColumns:'auto 1fr', gap:'10px 14px', fontFamily:'JetBrains Mono, monospace', fontSize:12, marginBottom:14}}>
+            <div style={{color:'var(--ink-muted)'}}>scrambled SERVICE = first 16 PN bits</div>
+            <div>{renderBits16(pnFromSeed, true)}</div>
+            <div style={{color:'var(--ink-muted)'}}>read PN[0..10] LSB-first → seed</div>
+            <div>
+              PN[0..10] = [{Array.from(pnFromSeed.slice(0, 11)).join(', ')}]
+              {' '}→ <code style={{color:'var(--accent)', fontWeight:700}}>{recoveredFromSeed}</code>
+              {' '}({fwOk ? <span style={{color:'var(--green)'}}>✓ matches Tx seed</span>
+                         : <span style={{color:'var(--red)'}}>✗ MISMATCH (port bug)</span>})
+            </div>
+          </div>
+        </>
+      )}
+
+      {mode === 'reverse' && (
+        <>
+          <div style={{display:'flex', gap:10, alignItems:'flex-start', flexWrap:'wrap', marginBottom:14, fontSize:13, fontFamily:'JetBrains Mono, monospace'}}>
+            <label style={{flex:1, minWidth:300}}>
+              Captured 16 SERVICE bits (paste from VSA / sniffer; spaces &amp; tabs ignored):
+              <input type="text" value={captured} onChange={e => setCaptured(e.target.value)}
+                placeholder="01110100 11110100"
+                style={{display:'block', width:'100%', marginTop:4, padding:'6px 10px', border:'1px solid var(--line)', borderRadius:4, fontFamily:'inherit'}}/>
+            </label>
+            <div style={{display:'flex', gap:6, marginTop:22, flexWrap:'wrap'}}>
+              {[
+                ['0111010011110100', 'instrument example'],
+                ['1011101000001010', 'seed = 93 reference'],
+                ['1111111111111111', 'all-1s NOTE 1 (seed = 0x7FF)'],
+              ].map(([bits, label]) => (
+                <button key={bits} onClick={() => setCaptured(bits)} style={{
+                  fontSize:11, padding:'4px 10px', borderRadius:5, background:'#fff',
+                  color:'var(--accent)', border:'1px solid var(--line)', cursor:'pointer',
+                  fontFamily:'JetBrains Mono, monospace'
+                }}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {!capturedBits.valid && (
+            <div style={{padding:'8px 12px', background:'#fef3c7', border:'1px solid #fbbf24',
+                         borderRadius:5, fontSize:12, color:'#92400e', marginBottom:12}}>
+              Need exactly 16 binary digits; got {capturedBits.cleaned.length}.
+            </div>
+          )}
+
+          {capturedBits.valid && (
+            <div style={{display:'grid', gridTemplateColumns:'auto 1fr', gap:'14px 14px', fontFamily:'JetBrains Mono, monospace', fontSize:12, marginBottom:14, alignItems:'center'}}>
+
+              <div style={{color:'var(--ink-muted)'}}><b>Step 1.</b> parse 16 bits = first 16 PN outputs</div>
+              <div>{renderBits16(capturedBits.arr, true)}</div>
+
+              <div style={{color:'var(--ink-muted)'}}><b>Step 2.</b> highlight PN[0..10] (first 11 bits)</div>
+              <div style={{color:'var(--ink-dim)'}}>
+                PN[0..10] = [{first11.join(', ')}] (the highlighted blue boxes above)
+              </div>
+
+              <div style={{color:'var(--ink-muted)'}}><b>Step 3.</b> read LSB-first → seed integer</div>
+              <div>
+                <span style={{fontSize:11, color:'var(--ink-muted)'}}>
+                  seed = {first11.map((b,k) => b ? `2^${k}` : null).filter(Boolean).join(' + ') || '0'} = </span>
+                <code style={{color:'var(--accent)', fontWeight:700, fontSize:14, marginLeft:4}}>{derivedSeed}</code>
+                <span style={{marginLeft:10, color:'var(--ink-dim)'}}>
+                  (binary <code>{derivedSeed.toString(2).padStart(11, '0')}</code>,
+                  {' '}hex <code>0x{derivedSeed.toString(16).padStart(3, '0').toUpperCase()}</code>)
+                </span>
+              </div>
+
+              <div style={{color:'var(--ink-muted)'}}><b>Step 4.</b> verify: regenerate PN from this seed</div>
+              <div>
+                {!derivedSeedValid
+                  ? <span style={{color:'var(--red)'}}>✗ Derived seed = 0 is invalid (LFSR locks at all-zero state). Captured bits look corrupted.</span>
+                  : (
+                    <>
+                      regenerated:&nbsp; {renderBits16(regenPN, false, capturedBits.arr.map((b,i) => b !== regenPN[i]))}
+                      <div style={{marginTop:6}}>
+                        {regenMatch
+                          ? <span style={{color:'var(--green)', fontWeight:700}}>✓ matches captured bits — seed = {derivedSeed} is correct</span>
+                          : <span style={{color:'var(--red)', fontWeight:700}}>✗ does NOT match. Possible causes: (a) bits aren't actually scrambled SERVICE, (b) bit-order convention differs (try reversing each byte), (c) capture has bit errors</span>}
+                      </div>
+                    </>
+                  )}
+              </div>
+
+              {derivedSeedValid && regenMatch && (
+                <>
+                  <div style={{color:'var(--ink-muted)'}}>load into Forward mode</div>
+                  <div>
+                    <button onClick={() => { setSeed(derivedSeed); setMode('forward'); }} style={{
+                      padding:'6px 14px', fontSize:12, borderRadius:5, fontFamily:'inherit',
+                      background:'var(--accent)', color:'#fff', border:'none', cursor:'pointer', fontWeight:600
+                    }}>
+                      ↻ Use seed = {derivedSeed} in Forward mode
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <div style={{padding:'10px 14px', background:'#eef6ff', border:'1px solid #b6d4fe',
+                       borderRadius:6, fontSize:12, lineHeight:1.6, color:'#1e3a8a'}}>
+            <b>Why this works:</b> SERVICE is sent as 16 zero bits; XORing with PN gives PN itself.
+            The spec mandates that the first 11 PN-output bits, read LSB-first, equal the
+            seed integer.  So a VSA reading the scrambled SERVICE bits has the seed for free —
+            no separate signalling, no key, no negotiation.  This 4-step procedure is what every
+            spec-compliant receiver does internally before LDPC decode of the data field.
+          </div>
+        </>
+      )}
+
+      <div style={{fontSize:11, color:'var(--ink-muted)', lineHeight:1.55, marginTop:14}}>
         Reference: IEEE 802.11be-2024 §36.3.13.2 (data scrambler), Table 36-1
         (SCRAMBLER_INITIAL_VALUE ↔ first scrambling bit), Eq. 36-46 (polynomial),
         Fig. 36-50 (LFSR diagram). Python: <code>ref/wifi7-python/modulation/scrambler.py</code>.
