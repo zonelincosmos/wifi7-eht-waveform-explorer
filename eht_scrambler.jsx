@@ -545,8 +545,9 @@ function CtrlBtn({children, onClick, primary}) {
 function ConveyorBelt({cur, step, playing, reveal}) {
   if (!cur) return null;
 
-  const cellW = 72, cellH = 68, gap = 8;
-  const padL = 160, padR = 320, padT = 170, padB = 150;
+  // Compact dimensions — fit in a typical desktop panel without horizontal scroll.
+  const cellW = 44, cellH = 42, gap = 4;
+  const padL = 88, padR = 168, padT = 96, padB = 78;
   const xs = [];
   for (let i = 0; i < 11; i++) xs.push(padL + i * (cellW + gap));
   const yReg = padT;
@@ -561,34 +562,35 @@ function ConveyorBelt({cur, step, playing, reveal}) {
   const x_X9  = xs[2]  + cellW/2;
   const x_X1  = xs[10] + cellW/2;
 
-  const yFBtop  = yReg - 110;           // top feedback rail (X11 tap goes here)
-  const yFBmid  = yReg - 70;            // middle rail (X9 tap goes here, below X11 tap)
-  const xFBxor  = padL - 90;            // feedback adder x-pos (left of register)
+  const yFBtop  = yReg - 64;            // top feedback rail (X11 tap goes here)
+  const yFBmid  = yReg - 38;            // middle rail (X9 tap goes here, below X11 tap)
+  const xFBxor  = padL - 52;            // feedback adder x-pos (left of register)
   const yFBxor  = yReg + cellH/2;
-  const xOutXor = xs[10] + cellW + 110;
-  const yOutXor = yReg + cellH + 100;
+  const xOutXor = xs[10] + cellW + 60;
+  const yOutXor = yReg + cellH + 50;
 
   return (
     <div style={{
-      background:'#fff', borderRadius:14, padding:'18px 20px 12px', marginBottom:14,
+      background:'#fff', borderRadius:14, padding:'14px 16px 10px', marginBottom:14,
       border: `1px solid ${SC.line}`,
       boxShadow:'0 1px 2px rgba(184,95,18,0.04), 0 6px 18px rgba(184,95,18,0.05)',
-      overflowX:'auto'
     }}>
       <div style={{fontSize:13, color:SC.amberDeep, textTransform:'uppercase', letterSpacing:'0.1em', fontWeight:700, marginBottom:4}}>
         The 11-cell shift register &amp; the data XOR
       </div>
-      <div style={{fontSize:12, color:SC.inkMuted, marginBottom:10, lineHeight:1.55}}>
+      <div style={{fontSize:12, color:SC.inkMuted, marginBottom:8, lineHeight:1.55}}>
         Three colour-coded zones:
         {' '}<b style={{color:SC.roseDeep}}>red</b> = LFSR feedback path (taps from X₁₁ &amp; X₉ →
         XOR → back into X₁₁ to refill the register).
-        {' '}<b style={{color:SC.amberDeep}}>amber</b> = the 11 register cells (showing their
-        current bit values).
-        {' '}<b style={{color:SC.plumDeep}}>purple</b> = the data XOR — where the PN bit (out of
-        cell X₁₁) meets your incoming data bit, producing the scrambled output.
+        {' '}<b style={{color:SC.amberDeep}}>amber</b> = the 11 register cells.
+        {' '}<b style={{color:SC.plumDeep}}>purple</b> = the data XOR — PN bit ⊕ incoming data
+        bit = scrambled output.
       </div>
 
-      <svg width={W} height={H} style={{display:'block', margin:'0 auto', minWidth:W}}>
+      {/* viewBox + width 100% lets the SVG scale to its container instead of
+          forcing a horizontal scrollbar on smaller screens. */}
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto"
+           preserveAspectRatio="xMidYMid meet" style={{display:'block'}}>
         <defs>
           <linearGradient id="cell-on" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={SC.amber}/>
@@ -616,47 +618,39 @@ function ConveyorBelt({cur, step, playing, reveal}) {
         </defs>
 
         {/* Belt base "rails" — visual conveyor */}
-        <rect x={padL - 14} y={yReg + cellH + 6} width={11*(cellW+gap) - gap + 28} height={6} rx={3}
+        <rect x={padL - 8} y={yReg + cellH + 4} width={11*(cellW+gap) - gap + 16} height={4} rx={2}
               fill={SC.lineSoft}/>
-        <rect x={padL - 14} y={yReg - 10} width={11*(cellW+gap) - gap + 28} height={4} rx={2}
+        <rect x={padL - 8} y={yReg - 6} width={11*(cellW+gap) - gap + 16} height={3} rx={1.5}
               fill={SC.lineSoft} opacity="0.6"/>
 
         {/* Feedback line (top) — taps from X11, X9 go UP, then to feedback XOR */}
         {reveal >= 3 && (
           <g>
-            {/* X11 tap goes up to top rail, then left into XOR */}
-            <path d={`M ${x_X11} ${yReg - 4} V ${yFBtop} H ${xFBxor}`}
-                  stroke={SC.rose} strokeWidth="2.5" fill="none"/>
-            {/* X9 tap goes up to mid rail, then left into XOR (below the X11 line) */}
-            <path d={`M ${x_X9} ${yReg - 4} V ${yFBmid} H ${xFBxor}`}
-                  stroke={SC.rose} strokeWidth="2.5" fill="none"/>
-            {/* Vertical drop from top+mid rails down into the XOR */}
-            <line x1={xFBxor} y1={yFBtop} x2={xFBxor} y2={yFBxor - 18}
-                  stroke={SC.rose} strokeWidth="2.5"/>
-            {/* tap dots */}
-            <circle cx={x_X11} cy={yReg - 4} r="6" fill={SC.rose} stroke="#fff" strokeWidth="2"/>
-            <circle cx={x_X9}  cy={yReg - 4} r="6" fill={SC.rose} stroke="#fff" strokeWidth="2"/>
-            {/* tap labels — placed ABOVE their respective rails so they never collide with X_n labels */}
-            <text x={x_X11 + 16} y={yFBtop - 8} textAnchor="start" fontSize="14" fill={SC.roseDeep}
+            <path d={`M ${x_X11} ${yReg - 3} V ${yFBtop} H ${xFBxor}`}
+                  stroke={SC.rose} strokeWidth="1.8" fill="none"/>
+            <path d={`M ${x_X9} ${yReg - 3} V ${yFBmid} H ${xFBxor}`}
+                  stroke={SC.rose} strokeWidth="1.8" fill="none"/>
+            <line x1={xFBxor} y1={yFBtop} x2={xFBxor} y2={yFBxor - 12}
+                  stroke={SC.rose} strokeWidth="1.8"/>
+            <circle cx={x_X11} cy={yReg - 3} r="3.5" fill={SC.rose} stroke="#fff" strokeWidth="1.5"/>
+            <circle cx={x_X9}  cy={yReg - 3} r="3.5" fill={SC.rose} stroke="#fff" strokeWidth="1.5"/>
+            <text x={x_X11 + 8} y={yFBtop - 5} textAnchor="start" fontSize="9.5" fill={SC.roseDeep}
                   fontFamily="JetBrains Mono, monospace" fontWeight="700">tap X₁₁</text>
-            <text x={x_X9 + 16}  y={yFBmid - 8} textAnchor="start" fontSize="14" fill={SC.roseDeep}
+            <text x={x_X9 + 8}  y={yFBmid - 5} textAnchor="start" fontSize="9.5" fill={SC.roseDeep}
                   fontFamily="JetBrains Mono, monospace" fontWeight="700">tap X₉</text>
 
-            {/* Feedback XOR adder */}
-            <XorBubble cx={xFBxor} cy={yFBxor} val={cur.fb} color={SC.rose} colorDeep={SC.roseDeep}/>
-            {/* fb formula */}
-            <text x={xFBxor} y={yFBxor + 60} textAnchor="middle" fontSize="13"
+            <XorBubble cx={xFBxor} cy={yFBxor} val={cur.fb} color={SC.rose} colorDeep={SC.roseDeep} small/>
+            <text x={xFBxor} y={yFBxor + 36} textAnchor="middle" fontSize="9.5"
                   fontFamily="JetBrains Mono, monospace" fill={SC.roseDeep} fontWeight="700">
               fb = X₁₁⊕X₉
             </text>
-            <text x={xFBxor} y={yFBxor + 78} textAnchor="middle" fontSize="13"
+            <text x={xFBxor} y={yFBxor + 49} textAnchor="middle" fontSize="9.5"
                   fontFamily="JetBrains Mono, monospace" fill={SC.roseDeep}>
-              {cur.tapX11}⊕{cur.tapX9} = <tspan fontWeight="700" fontSize="15">{cur.fb}</tspan>
+              {cur.tapX11}⊕{cur.tapX9} = <tspan fontWeight="700" fontSize="11">{cur.fb}</tspan>
             </text>
 
-            {/* Feedback wire from XOR into X11 cell */}
-            <line x1={xFBxor + 22} y1={yFBxor} x2={xs[0] - 4} y2={yFBxor}
-                  stroke={SC.rose} strokeWidth="2.5" markerEnd="url(#arrR)"/>
+            <line x1={xFBxor + 14} y1={yFBxor} x2={xs[0] - 3} y2={yFBxor}
+                  stroke={SC.rose} strokeWidth="1.8" markerEnd="url(#arrR)"/>
           </g>
         )}
 
@@ -666,69 +660,65 @@ function ConveyorBelt({cur, step, playing, reveal}) {
           const tap = isTap(i);
           return (
             <g key={i}>
-              <rect x={xs[i]} y={yReg} width={cellW} height={cellH} rx={11}
+              <rect x={xs[i]} y={yReg} width={cellW} height={cellH} rx={6}
                     fill={v ? 'url(#cell-on)' : 'url(#cell-off)'}
                     stroke={v ? SC.amberDeep : SC.line}
-                    strokeWidth="2"
+                    strokeWidth="1.4"
                     filter={v ? 'url(#cellShadow)' : ''}
                     style={{transition: `all ${ANIM.step}ms ${ANIM.ease}`}}/>
-              <text x={xs[i] + cellW/2} y={yReg + cellH/2 + 11} textAnchor="middle"
-                    fontFamily="JetBrains Mono, monospace" fontSize="30" fontWeight="700"
+              <text x={xs[i] + cellW/2} y={yReg + cellH/2 + 7} textAnchor="middle"
+                    fontFamily="JetBrains Mono, monospace" fontSize="20" fontWeight="700"
                     fill={v ? '#fff' : SC.inkMuted}
                     style={{transition: `fill ${ANIM.step}ms ${ANIM.ease}`}}>{v}</text>
-              <text x={xs[i] + cellW/2} y={yReg - 22} textAnchor="middle"
-                    fontSize="15" fill={tap ? SC.roseDeep : SC.inkMuted}
+              <text x={xs[i] + cellW/2} y={yReg - 13} textAnchor="middle"
+                    fontSize="10.5" fill={tap ? SC.roseDeep : SC.inkMuted}
                     fontWeight={tap ? 700 : 500}
                     fontFamily="JetBrains Mono, monospace">
-                X<tspan fontSize="12" baselineShift="sub">{cellName(i)}</tspan>
+                X<tspan fontSize="8" baselineShift="sub">{cellName(i)}</tspan>
               </text>
             </g>
           );
         })}
 
-        {/* Internal shift arrows: values move LEFT→RIGHT (X11 is leftmost, X1 rightmost; X_i ← X_{i+1} means slot at i gets value from slot to its left) */}
+        {/* Internal shift arrows */}
         {reveal >= 2 && [0,1,2,3,4,5,6,7,8,9].map(i=>(
           <path key={i}
-                d={`M ${xs[i] + cellW + 4} ${yReg + cellH + 56} L ${xs[i+1] - 4} ${yReg + cellH + 56}`}
-                stroke={SC.inkMuted} strokeWidth="1.6" markerEnd="url(#arrK)" opacity="0.6"/>
+                d={`M ${xs[i] + cellW + 1} ${yReg + cellH + 30} L ${xs[i+1] - 1} ${yReg + cellH + 30}`}
+                stroke={SC.inkMuted} strokeWidth="1.2" markerEnd="url(#arrK)" opacity="0.6"/>
         ))}
         {reveal >= 2 && (
-          <text x={(xs[2] + xs[7] + cellW)/2} y={yReg + cellH + 80} textAnchor="middle"
-                fontSize="13" fill={SC.inkMuted} fontFamily="JetBrains Mono, monospace" fontStyle="italic">
-            shift right · X<tspan fontSize="11" baselineShift="sub">i</tspan> ← X<tspan fontSize="11" baselineShift="sub">i+1</tspan>
+          <text x={(xs[2] + xs[7] + cellW)/2} y={yReg + cellH + 44} textAnchor="middle"
+                fontSize="9.5" fill={SC.inkMuted} fontFamily="JetBrains Mono, monospace" fontStyle="italic">
+            shift right · X<tspan fontSize="8" baselineShift="sub">i</tspan> ← X<tspan fontSize="8" baselineShift="sub">i+1</tspan>
           </text>
         )}
 
-        {/* Output: X11 (leftmost cell) drops down to output XOR per IEEE Fig 36-50 */}
+        {/* Output: X11 drops down to output XOR */}
         {reveal >= 4 && (
           <g>
-            {/* X11 (leftmost) → drop down → over to output XOR */}
-            <path d={`M ${x_X11} ${yReg + cellH + 6} V ${yOutXor} H ${xOutXor - 24}`}
-                  stroke={SC.rose} strokeWidth="2.5" fill="none"/>
-            <text x={x_X11 - 30} y={yReg + cellH + 30} fontSize="13"
+            <path d={`M ${x_X11} ${yReg + cellH + 4} V ${yOutXor} H ${xOutXor - 14}`}
+                  stroke={SC.rose} strokeWidth="1.8" fill="none"/>
+            <text x={x_X11 - 14} y={yReg + cellH + 18} fontSize="9.5"
                   fontFamily="JetBrains Mono, monospace" fill={SC.roseDeep} fontWeight="700">
               s_n = X₁₁ = {cur.sBit}
             </text>
 
-            {/* Input wire — comes in from far left, well below the register, into output XOR */}
-            <line x1={padL - 130} y1={yOutXor} x2={xOutXor - 24} y2={yOutXor}
-                  stroke={SC.sageDeep} strokeWidth="2.5" markerEnd="url(#arrG)"/>
-            <text x={padL - 130} y={yOutXor - 10} textAnchor="start" fontSize="13"
+            <line x1={padL - 70} y1={yOutXor} x2={xOutXor - 14} y2={yOutXor}
+                  stroke={SC.sageDeep} strokeWidth="1.8" markerEnd="url(#arrG)"/>
+            <text x={padL - 70} y={yOutXor - 6} textAnchor="start" fontSize="9.5"
                   fontFamily="JetBrains Mono, monospace" fill={SC.sageDeep} fontWeight="700">
               in_n = {cur.inBit}
             </text>
 
-            {/* Output XOR bubble */}
-            <XorBubble cx={xOutXor} cy={yOutXor} val={cur.outBit} color={SC.plum} colorDeep={SC.plumDeep}/>
+            <XorBubble cx={xOutXor} cy={yOutXor} val={cur.outBit} color={SC.plum} colorDeep={SC.plumDeep} small/>
 
-            {/* Output arrow */}
-            <line x1={xOutXor + 24} y1={yOutXor} x2={xOutXor + 110} y2={yOutXor}
-                  stroke={SC.plum} strokeWidth="2.5" markerEnd="url(#arrP)"/>
-            <text x={xOutXor + 118} y={yOutXor - 8} fontSize="15"
+            <line x1={xOutXor + 14} y1={yOutXor} x2={xOutXor + 60} y2={yOutXor}
+                  stroke={SC.plum} strokeWidth="1.8" markerEnd="url(#arrP)"/>
+            <text x={xOutXor + 66} y={yOutXor - 4} fontSize="11"
                   fontFamily="JetBrains Mono, monospace" fill={SC.plumDeep} fontWeight="700">
               out = {cur.outBit}
             </text>
-            <text x={xOutXor + 118} y={yOutXor + 12} fontSize="12"
+            <text x={xOutXor + 66} y={yOutXor + 8} fontSize="9"
                   fontFamily="JetBrains Mono, monospace" fill={SC.plum}>
               (scrambled)
             </text>
@@ -747,14 +737,17 @@ function ConveyorBelt({cur, step, playing, reveal}) {
   );
 }
 
-function XorBubble({cx, cy, val, color, colorDeep}) {
+function XorBubble({cx, cy, val, color, colorDeep, small}) {
+  const r = small ? 13 : 22;
+  const fontSize = small ? 14 : 22;
+  const valOff = small ? { x: 11, y: -8, fs: 9 } : { x: 17, y: -14, fs: 11 };
   return (
     <g>
-      <circle cx={cx} cy={cy} r="22" fill="#fff" stroke={color} strokeWidth="2.5"/>
-      <circle cx={cx} cy={cy} r="22" fill={color} opacity="0.08"/>
-      <text x={cx} y={cy + 7} textAnchor="middle" fontSize="22" fontWeight="700" fill={colorDeep}>⊕</text>
+      <circle cx={cx} cy={cy} r={r} fill="#fff" stroke={color} strokeWidth={small ? 1.6 : 2.5}/>
+      <circle cx={cx} cy={cy} r={r} fill={color} opacity="0.08"/>
+      <text x={cx} y={cy + (small ? 4.5 : 7)} textAnchor="middle" fontSize={fontSize} fontWeight="700" fill={colorDeep}>⊕</text>
       {val !== undefined && (
-        <text x={cx + 17} y={cy - 14} fontSize="11" fontFamily="JetBrains Mono, monospace"
+        <text x={cx + valOff.x} y={cy + valOff.y} fontSize={valOff.fs} fontFamily="JetBrains Mono, monospace"
               fill={colorDeep} fontWeight="700">={val}</text>
       )}
     </g>
